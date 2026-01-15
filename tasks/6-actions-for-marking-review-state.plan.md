@@ -16,7 +16,7 @@ references:
 planGeneratedAt: 2026-01-15T21:19:51.170Z
 promptsGeneratedAt: 2026-01-15T21:19:51.170Z
 createdAt: 2026-01-15T01:45:08.558Z
-updatedAt: 2026-01-15T21:26:38.436Z
+updatedAt: 2026-01-15T21:27:59.997Z
 tasks:
   - title: Add review action names to actions.lua registry
     done: true
