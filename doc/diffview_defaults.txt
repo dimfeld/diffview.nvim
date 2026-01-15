@@ -89,6 +89,15 @@ DEFAULT CONFIG                                  *diffview.defaults*
       DiffviewOpen = {},
       DiffviewFileHistory = {},
     },
+    review = {          -- See |diffview-config-review|
+      enabled = true,   -- Enable review tracking
+      cache_dir = nil,  -- Review state storage (default: ~/.cache/diffview.nvim/reviews/)
+      symbols = {       -- Symbols for review state indicator in file panel
+        unreviewed = " ",  -- Blank space (no indicator)
+        reviewed = "●",    -- Filled circle (green)
+        changed = "◐",     -- Half-filled circle (yellow)
+      },
+    },
     hooks = {},         -- See |diffview-config-hooks|
     keymaps = {
       disable_defaults = false, -- Disable the default keymaps

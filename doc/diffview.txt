@@ -681,6 +681,56 @@ default_args                                    *diffview-config-default_args*
                 }
 <
 
+review                                          *diffview-config-review*
+        Type: `table`, Default: (see defaults)
+
+        Configuration for review tracking. Review tracking allows you to
+        mark files as reviewed while working through a diff. A review state
+        indicator appears in the file panel showing whether each file is
+        unreviewed, reviewed, or has changed since it was last reviewed.
+
+        Fields: ~
+            {enabled} (boolean)
+                Enable or disable review tracking. When disabled, no review
+                indicator is shown in the file panel and review actions are
+                not available.
+                Default: `true`
+
+            {cache_dir} (string|nil)
+                Directory where review state is persisted. If nil, defaults
+                to `~/.cache/diffview.nvim/reviews/`.
+                Default: `nil`
+
+            {symbols} (table)
+                Symbols used for the review state indicator in the file
+                panel. Each symbol should be a single character.
+
+                • {unreviewed} (string) - Symbol for unreviewed files.
+                  Default: `" "` (blank space)
+                • {reviewed} (string) - Symbol for files that have been
+                  reviewed and haven't changed since.
+                  Default: `"●"` (filled circle)
+                • {changed} (string) - Symbol for files that were reviewed
+                  but have changed since the last review.
+                  Default: `"◐"` (half-filled circle)
+
+        The review state indicator uses the following highlight groups:
+          • `DiffviewReviewUnreviewed` - For unreviewed files
+          • `DiffviewReviewReviewed` - For reviewed files (links to diffAdded)
+          • `DiffviewReviewChanged` - For changed files (links to DiagnosticSignWarn)
+
+        Example: >lua
+                review = {
+                  enabled = true,
+                  cache_dir = vim.fn.stdpath("cache") .. "/my-reviews/",
+                  symbols = {
+                    unreviewed = " ",
+                    reviewed = "✓",
+                    changed = "!",
+                  },
+                }
+<
+
 hooks                                           *diffview-config-hooks*
         Type: `table<string, function>`, Default: `{}`
 
