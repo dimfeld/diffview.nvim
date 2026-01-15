@@ -114,6 +114,11 @@ M.defaults = {
   review = {
     enabled = true,
     cache_dir = nil, -- Falls back to ~/.cache/diffview.nvim/reviews/
+    symbols = {
+      unreviewed = " ",  -- Blank space (reserved column)
+      reviewed = "●",    -- Filled circle
+      changed = "◐",     -- Half-filled circle
+    },
   },
   default_args = {
     DiffviewOpen = {},

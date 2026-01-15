@@ -11,6 +11,7 @@ local M = {}
 ---@field folder_statuses "never"|"only_folded"|"always"
 
 ---@class FilePanel : Panel
+---@field view DiffView
 ---@field adapter VCSAdapter
 ---@field files FileDict
 ---@field path_args string[]

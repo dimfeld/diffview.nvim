@@ -1,17 +1,31 @@
-local config = require("diffview.config")
-local hl = require("diffview.hl")
-local utils = require("diffview.utils")
+local lazy = require("diffview.lazy")
 
-local pl = utils.path
+local config = lazy.require("diffview.config") ---@module "diffview.config"
+local hl = lazy.require("diffview.hl") ---@module "diffview.hl"
+local review = lazy.require("diffview.review") ---@module "diffview.review"
+local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
+
+local pl = lazy.access(utils, "path") ---@type PathLib
 
 ---@param comp  RenderComponent
 ---@param show_path boolean
 ---@param depth integer|nil
-local function render_file(comp, show_path, depth)
+---@param view DiffView|nil
+local function render_file(comp, show_path, depth, view)
   ---@type FileEntry
   local file = comp.context
+  local conf = config.get_config()
 
   comp:add_text(file.status .. " ", hl.get_git_hl(file.status))
+
+  -- Review status indicator
+  if view and view.review_state and conf.review and conf.review.enabled then
+    local review_status = review.get_file_status(view, file)
+    if review_status then
+      local symbol = conf.review.symbols[review_status] or "?"
+      comp:add_text(symbol .. " ", hl.get_review_hl(review_status))
+    end
+  end
 
   if depth then
     comp:add_text(string.rep(" ", depth * 2 + 2))
@@ -47,9 +61,10 @@ local function render_file(comp, show_path, depth)
 end
 
 ---@param comp RenderComponent
-local function render_file_list(comp)
+---@param view DiffView|nil
+local function render_file_list(comp, view)
   for _, file_comp in ipairs(comp.components) do
-    render_file(file_comp, true)
+    render_file(file_comp, true, nil, view)
   end
 end
 
@@ -68,11 +83,12 @@ end
 
 ---@param depth integer
 ---@param comp RenderComponent
-local function render_file_tree_recurse(depth, comp)
+---@param view DiffView|nil
+local function render_file_tree_recurse(depth, comp, view)
   local conf = config.get_config()
 
   if comp.name == "file" then
-    render_file(comp, false, depth)
+    render_file(comp, false, depth, view)
     return
   end
 
@@ -109,25 +125,27 @@ local function render_file_tree_recurse(depth, comp)
 
   if not ctx.collapsed then
     for _, item in ipairs(items.components) do
-      render_file_tree_recurse(depth + 1, item)
+      render_file_tree_recurse(depth + 1, item, view)
     end
   end
 end
 
 ---@param comp RenderComponent
-local function render_file_tree(comp)
+---@param view DiffView|nil
+local function render_file_tree(comp, view)
   for _, c in ipairs(comp.components) do
-    render_file_tree_recurse(0, c)
+    render_file_tree_recurse(0, c, view)
   end
 end
 
 ---@param listing_style "list"|"tree"
 ---@param comp RenderComponent
-local function render_files(listing_style, comp)
+---@param view DiffView|nil
+local function render_files(listing_style, comp, view)
   if listing_style == "list" then
-    return render_file_list(comp)
+    return render_file_list(comp, view)
   end
-  render_file_tree(comp)
+  render_file_tree(comp, view)
 end
 
 ---@param panel FilePanel
@@ -139,6 +157,7 @@ return function(panel)
   panel.render_data:clear()
   local conf = config.get_config()
   local width = panel:infer_width()
+  local view = panel.view
 
   local comp = panel.components.path.comp
 
@@ -159,7 +178,7 @@ return function(panel)
     comp:add_text("(" .. #panel.files.conflicting .. ")", "DiffviewFilePanelCounter")
     comp:ln()
 
-    render_files(panel.listing_style, panel.components.conflicting.files.comp)
+    render_files(panel.listing_style, panel.components.conflicting.files.comp, view)
     panel.components.conflicting.margin.comp:add_line()
   end
 
@@ -173,7 +192,7 @@ return function(panel)
     comp:add_text("(" .. #panel.files.working .. ")", "DiffviewFilePanelCounter")
     comp:ln()
 
-    render_files(panel.listing_style, panel.components.working.files.comp)
+    render_files(panel.listing_style, panel.components.working.files.comp, view)
     panel.components.working.margin.comp:add_line()
   end
 
@@ -183,7 +202,7 @@ return function(panel)
     comp:add_text("(" .. #panel.files.staged .. ")", "DiffviewFilePanelCounter")
     comp:ln()
 
-    render_files(panel.listing_style, panel.components.staged.files.comp)
+    render_files(panel.listing_style, panel.components.staged.files.comp, view)
     panel.components.staged.margin.comp:add_line()
   end
 

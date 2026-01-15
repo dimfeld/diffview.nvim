@@ -76,6 +76,9 @@ function DiffView:init(opt)
     ),
   })
 
+  -- Set panel's back-reference to this view
+  self.panel.view = self
+
   self.attached_bufs = {}
   self.emitter:on("file_open_post", utils.bind(self.file_open_post, self))
   self.valid = true
