@@ -602,3 +602,376 @@ describe("review.get_file_status integration", function()
     eq(nil, result)
   end)
 end)
+
+describe("DiffView review event listeners", function()
+  local original_config
+
+  -- Helper to create a mock panel
+  local function create_mock_panel()
+    local render_calls = 0
+    local redraw_calls = 0
+    local is_panel_open = true
+
+    return {
+      render = function()
+        render_calls = render_calls + 1
+      end,
+      redraw = function()
+        redraw_calls = redraw_calls + 1
+      end,
+      is_open = function()
+        return is_panel_open
+      end,
+      set_open = function(open)
+        is_panel_open = open
+      end,
+      get_render_calls = function()
+        return render_calls
+      end,
+      get_redraw_calls = function()
+        return redraw_calls
+      end,
+      reset_counts = function()
+        render_calls = 0
+        redraw_calls = 0
+      end,
+    }
+  end
+
+  -- Helper to create a mock DiffView with event listener setup
+  local function create_mock_diff_view_with_events(panel)
+    local view = {
+      panel = panel,
+      review_event_callbacks = {},
+    }
+
+    -- Replicate the init_review_event_listeners logic from diff_view.lua
+    local function refresh_panel()
+      if view.panel:is_open() then
+        view.panel:render()
+        view.panel:redraw()
+      end
+    end
+
+    view.review_event_callbacks.file_marked = function(_, payload)
+      if payload.view == view then
+        refresh_panel()
+      end
+    end
+
+    view.review_event_callbacks.file_cleared = function(_, payload)
+      if payload.view == view then
+        refresh_panel()
+      end
+    end
+
+    view.review_event_callbacks.all_cleared = function(_, payload)
+      if payload.view == view then
+        refresh_panel()
+      end
+    end
+
+    DiffviewGlobal.emitter:on("review_file_marked", view.review_event_callbacks.file_marked)
+    DiffviewGlobal.emitter:on("review_file_cleared", view.review_event_callbacks.file_cleared)
+    DiffviewGlobal.emitter:on("review_all_cleared", view.review_event_callbacks.all_cleared)
+
+    return view
+  end
+
+  -- Helper to clean up a mock view's event listeners
+  local function cleanup_mock_view(view)
+    if view.review_event_callbacks then
+      DiffviewGlobal.emitter:off(view.review_event_callbacks.file_marked)
+      DiffviewGlobal.emitter:off(view.review_event_callbacks.file_cleared)
+      DiffviewGlobal.emitter:off(view.review_event_callbacks.all_cleared)
+      view.review_event_callbacks = nil
+    end
+  end
+
+  before_each(function()
+    original_config = config._config
+    config._config = vim.tbl_deep_extend("force", {}, config.defaults)
+  end)
+
+  after_each(function()
+    config._config = original_config
+  end)
+
+  describe("panel refresh on events", function()
+    it("refreshes panel when review_file_marked event is emitted for current view", function()
+      local panel = create_mock_panel()
+      local view = create_mock_diff_view_with_events(panel)
+
+      -- Emit the event for this view
+      DiffviewGlobal.emitter:emit("review_file_marked", {
+        view = view,
+        file_entry = { path = "test.lua" },
+        blob_hash = "abc123",
+      })
+
+      eq(1, panel.get_render_calls())
+      eq(1, panel.get_redraw_calls())
+
+      cleanup_mock_view(view)
+    end)
+
+    it("refreshes panel when review_file_cleared event is emitted for current view", function()
+      local panel = create_mock_panel()
+      local view = create_mock_diff_view_with_events(panel)
+
+      -- Emit the event for this view
+      DiffviewGlobal.emitter:emit("review_file_cleared", {
+        view = view,
+        file_entry = { path = "test.lua" },
+      })
+
+      eq(1, panel.get_render_calls())
+      eq(1, panel.get_redraw_calls())
+
+      cleanup_mock_view(view)
+    end)
+
+    it("refreshes panel when review_all_cleared event is emitted for current view", function()
+      local panel = create_mock_panel()
+      local view = create_mock_diff_view_with_events(panel)
+
+      -- Emit the event for this view
+      DiffviewGlobal.emitter:emit("review_all_cleared", {
+        view = view,
+      })
+
+      eq(1, panel.get_render_calls())
+      eq(1, panel.get_redraw_calls())
+
+      cleanup_mock_view(view)
+    end)
+
+    it("does not refresh panel when event is for a different view", function()
+      local panel = create_mock_panel()
+      local view = create_mock_diff_view_with_events(panel)
+
+      local other_view = { id = "other_view" }
+
+      -- Emit events for a DIFFERENT view
+      DiffviewGlobal.emitter:emit("review_file_marked", {
+        view = other_view,
+        file_entry = { path = "test.lua" },
+        blob_hash = "abc123",
+      })
+
+      DiffviewGlobal.emitter:emit("review_file_cleared", {
+        view = other_view,
+        file_entry = { path = "test.lua" },
+      })
+
+      DiffviewGlobal.emitter:emit("review_all_cleared", {
+        view = other_view,
+      })
+
+      -- Should NOT have refreshed
+      eq(0, panel.get_render_calls())
+      eq(0, panel.get_redraw_calls())
+
+      cleanup_mock_view(view)
+    end)
+
+    it("does not refresh panel when panel is closed", function()
+      local panel = create_mock_panel()
+      local view = create_mock_diff_view_with_events(panel)
+
+      -- Close the panel
+      panel.set_open(false)
+
+      -- Emit the event for this view
+      DiffviewGlobal.emitter:emit("review_file_marked", {
+        view = view,
+        file_entry = { path = "test.lua" },
+        blob_hash = "abc123",
+      })
+
+      -- Should NOT have refreshed since panel is closed
+      eq(0, panel.get_render_calls())
+      eq(0, panel.get_redraw_calls())
+
+      cleanup_mock_view(view)
+    end)
+
+    it("handles multiple events correctly", function()
+      local panel = create_mock_panel()
+      local view = create_mock_diff_view_with_events(panel)
+
+      -- Emit multiple events
+      DiffviewGlobal.emitter:emit("review_file_marked", {
+        view = view,
+        file_entry = { path = "file1.lua" },
+        blob_hash = "hash1",
+      })
+
+      DiffviewGlobal.emitter:emit("review_file_marked", {
+        view = view,
+        file_entry = { path = "file2.lua" },
+        blob_hash = "hash2",
+      })
+
+      DiffviewGlobal.emitter:emit("review_file_cleared", {
+        view = view,
+        file_entry = { path = "file3.lua" },
+      })
+
+      eq(3, panel.get_render_calls())
+      eq(3, panel.get_redraw_calls())
+
+      cleanup_mock_view(view)
+    end)
+  end)
+
+  describe("event listener cleanup", function()
+    it("removes event listeners when cleanup is called", function()
+      local panel = create_mock_panel()
+      local view = create_mock_diff_view_with_events(panel)
+
+      -- Verify listeners are registered
+      local marked_listeners = DiffviewGlobal.emitter:get("review_file_marked")
+      local cleared_listeners = DiffviewGlobal.emitter:get("review_file_cleared")
+      local all_cleared_listeners = DiffviewGlobal.emitter:get("review_all_cleared")
+
+      -- Check our callbacks are in the listener lists
+      local has_marked = false
+      local has_cleared = false
+      local has_all_cleared = false
+
+      if marked_listeners then
+        for _, listener in ipairs(marked_listeners) do
+          if listener.callback == view.review_event_callbacks.file_marked then
+            has_marked = true
+            break
+          end
+        end
+      end
+
+      if cleared_listeners then
+        for _, listener in ipairs(cleared_listeners) do
+          if listener.callback == view.review_event_callbacks.file_cleared then
+            has_cleared = true
+            break
+          end
+        end
+      end
+
+      if all_cleared_listeners then
+        for _, listener in ipairs(all_cleared_listeners) do
+          if listener.callback == view.review_event_callbacks.all_cleared then
+            has_all_cleared = true
+            break
+          end
+        end
+      end
+
+      eq(true, has_marked, "file_marked listener should be registered")
+      eq(true, has_cleared, "file_cleared listener should be registered")
+      eq(true, has_all_cleared, "all_cleared listener should be registered")
+
+      -- Store references before cleanup
+      local file_marked_cb = view.review_event_callbacks.file_marked
+      local file_cleared_cb = view.review_event_callbacks.file_cleared
+      local all_cleared_cb = view.review_event_callbacks.all_cleared
+
+      -- Cleanup (simulating DiffView:close())
+      cleanup_mock_view(view)
+
+      -- Verify listeners are removed
+      marked_listeners = DiffviewGlobal.emitter:get("review_file_marked")
+      cleared_listeners = DiffviewGlobal.emitter:get("review_file_cleared")
+      all_cleared_listeners = DiffviewGlobal.emitter:get("review_all_cleared")
+
+      has_marked = false
+      has_cleared = false
+      has_all_cleared = false
+
+      if marked_listeners then
+        for _, listener in ipairs(marked_listeners) do
+          if listener.callback == file_marked_cb then
+            has_marked = true
+            break
+          end
+        end
+      end
+
+      if cleared_listeners then
+        for _, listener in ipairs(cleared_listeners) do
+          if listener.callback == file_cleared_cb then
+            has_cleared = true
+            break
+          end
+        end
+      end
+
+      if all_cleared_listeners then
+        for _, listener in ipairs(all_cleared_listeners) do
+          if listener.callback == all_cleared_cb then
+            has_all_cleared = true
+            break
+          end
+        end
+      end
+
+      eq(false, has_marked, "file_marked listener should be removed after cleanup")
+      eq(false, has_cleared, "file_cleared listener should be removed after cleanup")
+      eq(false, has_all_cleared, "all_cleared listener should be removed after cleanup")
+    end)
+
+    it("sets review_event_callbacks to nil after cleanup", function()
+      local panel = create_mock_panel()
+      local view = create_mock_diff_view_with_events(panel)
+
+      neq(nil, view.review_event_callbacks)
+
+      cleanup_mock_view(view)
+
+      eq(nil, view.review_event_callbacks)
+    end)
+
+    it("events do not trigger panel refresh after cleanup", function()
+      local panel = create_mock_panel()
+      local view = create_mock_diff_view_with_events(panel)
+
+      -- Cleanup
+      cleanup_mock_view(view)
+
+      -- Reset panel counts
+      panel.reset_counts()
+
+      -- Emit events - should not trigger any refresh since listeners are removed
+      DiffviewGlobal.emitter:emit("review_file_marked", {
+        view = view,
+        file_entry = { path = "test.lua" },
+        blob_hash = "abc123",
+      })
+
+      DiffviewGlobal.emitter:emit("review_file_cleared", {
+        view = view,
+        file_entry = { path = "test.lua" },
+      })
+
+      DiffviewGlobal.emitter:emit("review_all_cleared", {
+        view = view,
+      })
+
+      eq(0, panel.get_render_calls())
+      eq(0, panel.get_redraw_calls())
+    end)
+
+    it("cleanup is idempotent - can be called multiple times safely", function()
+      local panel = create_mock_panel()
+      local view = create_mock_diff_view_with_events(panel)
+
+      -- First cleanup
+      cleanup_mock_view(view)
+      eq(nil, view.review_event_callbacks)
+
+      -- Second cleanup should not error
+      cleanup_mock_view(view)
+      eq(nil, view.review_event_callbacks)
+    end)
+  end)
+end)
