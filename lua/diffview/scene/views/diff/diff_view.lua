@@ -650,12 +650,10 @@ function DiffView:_navigate_review_file(delta, status_filter, label)
 
   -- Build list of files matching the filter
   local matching_files = {}
-  local matching_indices = {}
-  for i, file in ipairs(files) do
+  for _, file in ipairs(files) do
     local status = review.get_file_status(self, file)
     if status_filter(status) then
       matching_files[#matching_files + 1] = file
-      matching_indices[#matching_indices + 1] = i
     end
   end
 
