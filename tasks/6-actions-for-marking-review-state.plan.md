@@ -5,7 +5,7 @@ goal: ""
 id: 6
 uuid: 7b6950a9-0254-43a1-9590-9d8a0e509bd4
 generatedBy: agent
-status: in_progress
+status: done
 priority: medium
 dependencies:
   - 2
@@ -16,10 +16,10 @@ references:
 planGeneratedAt: 2026-01-15T21:19:51.170Z
 promptsGeneratedAt: 2026-01-15T21:19:51.170Z
 createdAt: 2026-01-15T01:45:08.558Z
-updatedAt: 2026-01-15T21:20:40.401Z
+updatedAt: 2026-01-15T21:26:38.436Z
 tasks:
   - title: Add review action names to actions.lua registry
-    done: false
+    done: true
     description: >-
       Add the three new action names to the `action_names` array in
       `lua/diffview/actions.lua` (around lines 618-648):
@@ -35,7 +35,7 @@ tasks:
       This automatically generates the event-emitting functions that call
       `require("diffview").emit(action_name)`.
   - title: Implement review_mark_file listener in DiffView
-    done: false
+    done: true
     description: >-
       Add the `review_mark_file` listener handler in
       `lua/diffview/scene/views/diff/listeners.lua`:
@@ -52,7 +52,7 @@ tasks:
       No feedback message needed - the UI indicator (Plan 3) provides visual
       feedback.
   - title: Implement review_mark_all listener in DiffView
-    done: false
+    done: true
     description: >-
       Add the `review_mark_all` listener handler in
       `lua/diffview/scene/views/diff/listeners.lua`:
@@ -68,7 +68,7 @@ tasks:
 
       No feedback message needed.
   - title: Implement review_clear_file listener in DiffView
-    done: false
+    done: true
     description: >-
       Add the `review_clear_file` listener handler in
       `lua/diffview/scene/views/diff/listeners.lua`:
@@ -82,7 +82,7 @@ tasks:
 
       No feedback message needed.
   - title: Write unit tests for review action listeners
-    done: false
+    done: true
     description: >-
       Create `lua/diffview/tests/functional/review_actions_spec.lua` with tests
       for:
@@ -104,6 +104,22 @@ tasks:
 
       Use existing test patterns from `review_api_spec.lua` as a template.
       Create mock view objects with appropriate fields.
+changedFiles:
+  - .rmfilter/config/rmplan.yml
+  - AGENTS.md
+  - CLAUDE.md
+  - lua/diffview/actions.lua
+  - lua/diffview/config.lua
+  - lua/diffview/init.lua
+  - lua/diffview/review.lua
+  - lua/diffview/review_store.lua
+  - lua/diffview/scene/views/diff/diff_view.lua
+  - lua/diffview/scene/views/diff/listeners.lua
+  - lua/diffview/tests/functional/git_adapter_spec.lua
+  - lua/diffview/tests/functional/review_actions_spec.lua
+  - lua/diffview/tests/functional/review_api_spec.lua
+  - lua/diffview/tests/functional/review_store_spec.lua
+  - lua/diffview/vcs/adapters/git/init.lua
 tags: []
 ---
 
@@ -478,3 +494,23 @@ Use the existing test patterns from `review_api_spec.lua` and `review_store_spec
 - **Potential Gotcha**: The `view:infer_cur_file()` function can return `nil` if no file is selected and the cursor isn't on a file entry. Always check for nil before passing to review functions.
 
 - **No blocking requirements identified**: The review.lua API handles all validation and error cases internally.
+
+## Current Progress
+### Current State
+- All 5 tasks completed: action names added, listeners implemented, tests passing
+### Completed (So Far)
+- Added `review_mark_file`, `review_mark_all`, `review_clear_file` to action_names in actions.lua
+- Implemented all three listener handlers in listeners.lua using `view:infer_cur_file()` and delegating to review.lua API
+- Created comprehensive test suite in review_actions_spec.lua (14 tests covering all edge cases)
+- All 145 tests pass, code review clean
+### Remaining
+- None for this plan
+### Next Iteration Guidance
+- Plan 3 (render reviewed state in file panel) should consume the events emitted by these actions
+- Plan 5 (keymaps) should add default keybindings for these actions
+### Decisions / Changes
+- Used event-emitting pattern (action_names array) for consistency with existing codebase
+- Listeners return early when no file selected rather than showing error messages
+- No feedback messages from actions - UI indicator (Plan 3) provides visual feedback
+### Risks / Blockers
+- None
