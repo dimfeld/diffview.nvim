@@ -1215,6 +1215,46 @@ review_mark_file                                *diffview-actions-review_mark_fi
         "changed" rather than "reviewed". Only available when review tracking
         is enabled.
 
+[count] review_next_pending                     *diffview-actions-review_next_pending*
+        Contexts: `diff_view`, `file_panel`
+
+        Jump to the next file pending review. A file is "pending review" if
+        its review status is either "unreviewed" (never marked as reviewed) or
+        "changed" (was reviewed but has changed since). This allows quickly
+        navigating to files that need attention during code review.
+
+        Wraps around at the end of the file list. Supports Vim count prefix.
+
+        Return: ~
+            Shows position feedback like "Pending review [2/5]" when a match
+            is found. Shows an info message if no files need review.
+
+[count] review_prev_pending                     *diffview-actions-review_prev_pending*
+        Contexts: `diff_view`, `file_panel`
+
+        Jump to the previous file pending review. See
+        |diffview-actions-review_next_pending| for details.
+
+[count] review_next_unreviewed                  *diffview-actions-review_next_unreviewed*
+        Contexts: `diff_view`, `file_panel`
+
+        Jump to the next unreviewed file. Unlike
+        |diffview-actions-review_next_pending|, this only navigates to files
+        that have never been marked as reviewed - it skips files that were
+        reviewed but have since changed.
+
+        Wraps around at the end of the file list. Supports Vim count prefix.
+
+        Return: ~
+            Shows position feedback like "Unreviewed [1/3]" when a match is
+            found. Shows an info message if all files have been reviewed.
+
+[count] review_prev_unreviewed                  *diffview-actions-review_prev_unreviewed*
+        Contexts: `diff_view`, `file_panel`
+
+        Jump to the previous unreviewed file. See
+        |diffview-actions-review_next_unreviewed| for details.
+
 scroll_view({distance})                         *diffview-actions-scroll_view*
         Contexts: `panel`
 

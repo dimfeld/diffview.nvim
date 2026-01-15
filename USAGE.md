@@ -81,6 +81,28 @@ from the PR branch.
 
 ![file history cherry pick demo](https://user-images.githubusercontent.com/2786478/229853402-f45280ee-f6e2-4325-8a39-ce25b9c5221e.png)
 
+### Navigating Between Files Pending Review
+
+When reviewing a PR with many files, you can use the review navigation commands
+to quickly jump between files that need attention:
+
+- `]r` / `[r` - Jump to next/previous file pending review (unreviewed or changed)
+- `]R` / `[R` - Jump to next/previous unreviewed file only
+
+These commands work from both the file panel and diff view windows. They support
+Vim count prefixes (e.g., `2]r` skips two files) and wrap around at list boundaries.
+
+The "pending review" navigation (`]r`/`[r`) finds files that are either:
+- **Unreviewed**: Never marked as reviewed
+- **Changed**: Previously reviewed but modified since
+
+The "unreviewed only" navigation (`]R`/`[R`) is more restrictive - it only finds
+files that have never been marked as reviewed, skipping files that were reviewed
+but have since changed.
+
+Position feedback is shown when navigating, such as "Pending review [2/5]" or
+"Unreviewed [1/3]".
+
 ## Inspecting Diffs for Stashes
 
 The latest Git stash is always stored in the reference `refs/stash`. We can
