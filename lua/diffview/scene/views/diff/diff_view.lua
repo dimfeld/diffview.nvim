@@ -190,9 +190,9 @@ function DiffView:close()
 
     -- Clean up review event listeners
     if self.review_event_callbacks then
-      DiffviewGlobal.emitter:off(self.review_event_callbacks.file_marked)
-      DiffviewGlobal.emitter:off(self.review_event_callbacks.file_cleared)
-      DiffviewGlobal.emitter:off(self.review_event_callbacks.all_cleared)
+      DiffviewGlobal.emitter:off(self.review_event_callbacks.file_marked, "review_file_marked")
+      DiffviewGlobal.emitter:off(self.review_event_callbacks.file_cleared, "review_file_cleared")
+      DiffviewGlobal.emitter:off(self.review_event_callbacks.all_cleared, "review_all_cleared")
       self.review_event_callbacks = nil
     end
 

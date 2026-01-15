@@ -5,7 +5,7 @@ goal: ""
 id: 3
 uuid: 2445aa72-8e05-43bf-afdb-3c1e4b508db8
 generatedBy: agent
-status: in_progress
+status: done
 priority: medium
 dependencies:
   - 6
@@ -16,7 +16,7 @@ references:
 planGeneratedAt: 2026-01-15T21:49:11.508Z
 promptsGeneratedAt: 2026-01-15T21:49:11.508Z
 createdAt: 2026-01-15T00:26:07.713Z
-updatedAt: 2026-01-15T21:58:48.383Z
+updatedAt: 2026-01-15T22:07:56.018Z
 tasks:
   - title: Add review state highlight groups to hl.lua
     done: true
@@ -85,7 +85,7 @@ tasks:
          self.panel.view = self
          ```
   - title: Subscribe to review events for panel refresh
-    done: false
+    done: true
     description: >-
       In `lua/diffview/scene/views/diff/diff_view.lua`, add event subscriptions
       to refresh the panel when review state changes:
@@ -114,7 +114,7 @@ tasks:
 
       2. Store callbacks in `self.review_event_callbacks` table for cleanup.
   - title: Clean up event listeners on DiffView close
-    done: false
+    done: true
     description: >-
       In `lua/diffview/scene/views/diff/diff_view.lua`, modify the `close()`
       method to unsubscribe from review events:
@@ -173,7 +173,7 @@ tasks:
       3. In main render function, get view from `panel.view` and pass to
       render_files calls.
   - title: Write unit tests for review indicator rendering
-    done: false
+    done: true
     description: >-
       Create `lua/diffview/tests/functional/render_review_indicator_spec.lua`
       with tests:
@@ -204,7 +204,9 @@ changedFiles:
   - .rmfilter/config/rmplan.yml
   - AGENTS.md
   - CLAUDE.md
+  - README.md
   - doc/diffview.txt
+  - doc/diffview_defaults.txt
   - lua/diffview/actions.lua
   - lua/diffview/config.lua
   - lua/diffview/hl.lua
@@ -774,28 +776,30 @@ User Action (review_mark_file)
 
 ## Current Progress
 ### Current State
-- Core review indicator rendering is implemented and tested
-- Highlight groups, config symbols, view reference, and render logic all complete
-- 30 new tests added covering all rendering scenarios
+- All tasks for this plan are complete
+- Review indicator rendering fully implemented with event-driven panel refresh
+- 40 tests now cover all rendering and event handling scenarios
 
 ### Completed (So Far)
 - Task 1: Added review state highlight groups to hl.lua (ReviewUnreviewed, ReviewReviewed, ReviewChanged)
 - Task 2: Added review symbols configuration to config.lua (●, ◐, space)
 - Task 3: Added view reference to FilePanel and set it in DiffView init
+- Task 4: Added `init_review_event_listeners()` method that subscribes to review events and refreshes panel when state changes
+- Task 5: Added cleanup logic in `close()` method to unsubscribe from review events with explicit event_id parameters
 - Task 6: Modified render.lua to display review indicator after git status character
+- Task 7: Added 10 additional tests for event handling (panel refresh on events, cleanup verification)
 
 ### Remaining
-- Task 4: Subscribe to review events for panel refresh
-- Task 5: Clean up event listeners on DiffView close
-- Task 7: Write unit tests for review indicator rendering (partially done - 30 tests already added)
+- None - all tasks complete
 
 ### Next Iteration Guidance
-- Focus on Tasks 4 and 5 together - they are closely related (event subscription and cleanup)
-- Task 7 may already be sufficiently covered by the 30 tests added in this iteration
+- This plan is complete; proceed to dependent plans if any
 
 ### Decisions / Changes
 - Used lazy loading pattern for imports in render.lua to match existing project conventions
 - Review indicator renders between git status and indentation/icon as specified
+- Event subscriptions are set up in `post_open()` via `init_review_event_listeners()` method
+- Cleanup in `close()` uses explicit event_id parameters to `emitter:off()` for clarity
 
 ### Risks / Blockers
 - None
