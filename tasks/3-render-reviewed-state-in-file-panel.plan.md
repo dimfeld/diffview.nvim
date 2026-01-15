@@ -16,7 +16,7 @@ references:
 planGeneratedAt: 2026-01-15T21:49:11.508Z
 promptsGeneratedAt: 2026-01-15T21:49:11.508Z
 createdAt: 2026-01-15T00:26:07.713Z
-updatedAt: 2026-01-15T22:07:56.018Z
+updatedAt: 2026-01-15T22:09:15.922Z
 tasks:
   - title: Add review state highlight groups to hl.lua
     done: true
