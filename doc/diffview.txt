@@ -1143,6 +1143,28 @@ restore_entry                                   *diffview-actions-restore_entry*
         NOTE: A command is echoed that shows how to undo the change. Check
         |:messages| or |:DiffviewLog| to see it again.
 
+review_clear_file                               *diffview-actions-review_clear_file*
+        Contexts: `diff_view`, `file_panel`
+
+        Clear the review state for the current file. The file will appear as
+        unreviewed again. Only available when review tracking is enabled.
+
+review_mark_all                                 *diffview-actions-review_mark_all*
+        Contexts: `diff_view`, `file_panel`
+
+        Mark all files in the current diff view as reviewed. This stores the
+        current blob hash for each file, so if a file changes after being
+        marked, it will show as "changed" rather than "reviewed". Only
+        available when review tracking is enabled.
+
+review_mark_file                                *diffview-actions-review_mark_file*
+        Contexts: `diff_view`, `file_panel`
+
+        Mark the current file as reviewed. This stores the file's current blob
+        hash, so if the file changes after being marked, it will show as
+        "changed" rather than "reviewed". Only available when review tracking
+        is enabled.
+
 scroll_view({distance})                         *diffview-actions-scroll_view*
         Contexts: `panel`
 
@@ -1256,6 +1278,9 @@ actions:
         • |diffview-actions-focus_entry|
         • |diffview-actions-goto_file_edit|
         • |diffview-actions-jumpto_conflict|
+        • |diffview-actions-review_clear_file|
+        • |diffview-actions-review_mark_all|
+        • |diffview-actions-review_mark_file|
         • |diffview-actions-view_windo|
 
 ==============================================================================
