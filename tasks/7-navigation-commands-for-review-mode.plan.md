@@ -16,33 +16,33 @@ references:
 planGeneratedAt: 2026-01-15T22:50:19.842Z
 promptsGeneratedAt: 2026-01-15T22:50:19.842Z
 createdAt: 2026-01-15T01:45:14.237Z
-updatedAt: 2026-01-15T22:51:27.436Z
+updatedAt: 2026-01-15T22:59:46.713Z
 tasks:
   - title: Add action names to actions.lua
-    done: false
+    done: true
     description: "Add four new action names to the action_names list in
       lua/diffview/actions.lua: review_next_pending, review_prev_pending,
       review_next_unreviewed, review_prev_unreviewed"
   - title: Implement navigation methods in DiffView
-    done: false
+    done: true
     description: "Add helper function and four navigation methods to
       lua/diffview/scene/views/diff/diff_view.lua: next_pending_review_file,
       prev_pending_review_file, next_unreviewed_file, prev_unreviewed_file.
       Methods should filter files by review status, support count prefix, wrap
       around, and show position feedback."
   - title: Add event listeners
-    done: false
+    done: true
     description: "Add four new listener entries to
       lua/diffview/scene/views/diff/listeners.lua that delegate to the DiffView
       navigation methods: review_next_pending, review_prev_pending,
       review_next_unreviewed, review_prev_unreviewed"
   - title: Add default keybindings
-    done: false
+    done: true
     description: "Add keybindings to both view and file_panel sections in
       lua/diffview/config.lua: ]r/[r for pending review navigation, ]R/[R for
       unreviewed-only navigation"
   - title: Add tests for review navigation
-    done: false
+    done: true
     description: "Create lua/diffview/tests/functional/review_navigation_spec.lua
       with tests covering: basic navigation for pending and unreviewed, wrapping
       behavior, count support, edge cases (no matches, review disabled), and
@@ -51,6 +51,30 @@ tasks:
     done: false
     description: Update doc/diffview.txt with new keybindings and actions. Update
       USAGE.md with Review Navigation section explaining the new commands.
+changedFiles:
+  - .rmfilter/config/rmplan.yml
+  - AGENTS.md
+  - CLAUDE.md
+  - README.md
+  - doc/diffview.txt
+  - doc/diffview_defaults.txt
+  - lua/diffview/actions.lua
+  - lua/diffview/config.lua
+  - lua/diffview/hl.lua
+  - lua/diffview/init.lua
+  - lua/diffview/review.lua
+  - lua/diffview/review_store.lua
+  - lua/diffview/scene/views/diff/diff_view.lua
+  - lua/diffview/scene/views/diff/file_panel.lua
+  - lua/diffview/scene/views/diff/listeners.lua
+  - lua/diffview/scene/views/diff/render.lua
+  - lua/diffview/tests/functional/git_adapter_spec.lua
+  - lua/diffview/tests/functional/render_review_indicator_spec.lua
+  - lua/diffview/tests/functional/review_actions_spec.lua
+  - lua/diffview/tests/functional/review_api_spec.lua
+  - lua/diffview/tests/functional/review_navigation_spec.lua
+  - lua/diffview/tests/functional/review_store_spec.lua
+  - lua/diffview/vcs/adapters/git/init.lua
 tags: []
 ---
 
@@ -519,3 +543,31 @@ Vim count prefixes (e.g., `2]r` skips two files) and wrap around at list boundar
 3. **Complete feature**: Includes count support, wrapping, and feedback like existing navigation
 4. **Maintainability**: Minimal new code, reuses existing utilities and patterns
 5. **Testability**: Clear separation allows unit testing navigation logic
+
+## Current Progress
+### Current State
+- Tasks 1-5 completed: Navigation commands for review mode are fully implemented and tested
+- One task remaining: Update documentation (doc/diffview.txt and USAGE.md)
+
+### Completed (So Far)
+- Added four action names to `actions.lua`: `review_next_pending`, `review_prev_pending`, `review_next_unreviewed`, `review_prev_unreviewed`
+- Implemented navigation methods in `diff_view.lua` with helper function `_navigate_review_file()`
+- Added event listeners in `listeners.lua` delegating to DiffView methods
+- Added default keybindings (`]r`/`[r` for pending, `]R`/`[R` for unreviewed-only) to both `view` and `file_panel` sections in `config.lua`
+- Updated `doc/diffview_defaults.txt` with the new keybindings
+- Created comprehensive test suite in `review_navigation_spec.lua` (26 tests)
+
+### Remaining
+- Task 6: Update documentation (doc/diffview.txt and USAGE.md)
+
+### Next Iteration Guidance
+- Add keybindings and actions to doc/diffview.txt
+- Add Review Navigation section to USAGE.md
+
+### Decisions / Changes
+- Navigation methods follow the `next_conflict`/`prev_conflict` pattern for position feedback
+- Helper function `_navigate_review_file()` centralizes navigation logic with delta and status_filter parameters
+- "Pending review" includes both "unreviewed" AND "changed" files; "Unreviewed" is strictly unreviewed-only
+
+### Risks / Blockers
+- None
