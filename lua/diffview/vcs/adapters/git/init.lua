@@ -1308,6 +1308,63 @@ function GitAdapter:head_rev()
   return GitRev(RevType.COMMIT, s, true)
 end
 
+---Get the current branch name, or a detached HEAD identifier if not on a branch.
+---@return string branch The branch name, or "detached-<short-sha>" if in detached HEAD state
+function GitAdapter:get_current_branch()
+  local out, code = self:exec_sync({
+    "rev-parse",
+    "--abbrev-ref",
+    "HEAD",
+  }, {
+    cwd = self.ctx.toplevel,
+    retry = 2,
+    fail_on_empty = true,
+  })
+
+  if code ~= 0 then
+    -- Fall back to commit SHA if rev-parse fails
+    out, code = self:exec_sync({
+      "rev-parse",
+      "--short",
+      "HEAD",
+    }, {
+      cwd = self.ctx.toplevel,
+      retry = 2,
+      fail_on_empty = true,
+    })
+
+    if code ~= 0 or not out or #out == 0 then
+      return "unknown"
+    end
+
+    return "detached-" .. vim.trim(out[1])
+  end
+
+  local branch = vim.trim(out[1])
+
+  -- "HEAD" is returned when in detached HEAD state
+  if branch == "HEAD" then
+    -- Get the short commit SHA instead
+    out, code = self:exec_sync({
+      "rev-parse",
+      "--short",
+      "HEAD",
+    }, {
+      cwd = self.ctx.toplevel,
+      retry = 2,
+      fail_on_empty = true,
+    })
+
+    if code ~= 0 or not out or #out == 0 then
+      return "detached-unknown"
+    end
+
+    return "detached-" .. vim.trim(out[1])
+  end
+
+  return branch
+end
+
 ---@param path string
 ---@param rev_arg string?
 ---@return string?

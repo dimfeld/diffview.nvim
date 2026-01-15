@@ -1,6 +1,9 @@
 /doc/tags
 /.tests/
 /.dev/
+.nvimlog
+
+*.plan-agent-output.md
 
 # rmplan generated files
 .rmfilter/reviews

@@ -2,8 +2,15 @@
 
 paths:
   tasks: tasks
+updateDocs:
+  mode: after-iteration
 defaultExecutor: claude-code
 review:
   defaultExecutor: claude-code
 prCreation:
   draft: true
+executors:
+  claude-code:
+    permissionsMcp:
+      enabled: true
+      autoApproveCreatedFileDeletion: true

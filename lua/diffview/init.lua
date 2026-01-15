@@ -8,6 +8,7 @@ local lazy = require("diffview.lazy")
 local arg_parser = lazy.require("diffview.arg_parser") ---@module "diffview.arg_parser"
 local config = lazy.require("diffview.config") ---@module "diffview.config"
 local lib = lazy.require("diffview.lib") ---@module "diffview.lib"
+local review = lazy.require("diffview.review") ---@module "diffview.review"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 local vcs = lazy.require("diffview.vcs") ---@module "diffview.vcs"
 
@@ -273,6 +274,9 @@ end
 function M.nore_emit(event_name, ...)
   _emit(true, event_name, ...)
 end
+
+-- Expose review API
+M.review = review
 
 M.init()
 

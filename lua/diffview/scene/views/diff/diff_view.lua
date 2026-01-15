@@ -14,6 +14,7 @@ local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|Lazy
 local StandardView = lazy.access("diffview.scene.views.standard.standard_view", "StandardView") ---@type StandardView|LazyModule
 local config = lazy.require("diffview.config") ---@module "diffview.config"
 local debounce = lazy.require("diffview.debounce") ---@module "diffview.debounce"
+local review_store = lazy.require("diffview.review_store") ---@module "diffview.review_store"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 local vcs_utils = lazy.require("diffview.vcs.utils") ---@module "diffview.vcs.utils"
 local GitAdapter = lazy.access("diffview.vcs.adapters.git", "GitAdapter") ---@type GitAdapter|LazyModule
@@ -46,6 +47,7 @@ local M = {}
 ---@field initialized boolean
 ---@field valid boolean
 ---@field watcher uv_fs_poll_t # UV fs poll handle.
+---@field review_state? ReviewState # Review state for tracking reviewed files.
 local DiffView = oop.create_class("DiffView", StandardView.__get())
 
 ---DiffView constructor
@@ -86,7 +88,15 @@ function DiffView:post_open()
     name = fmt("diffview://%s/log/%d/%s", self.adapter.ctx.dir, self.tabpage, "commit_log"),
   })
 
-  if config.get_config().watch_index and self.adapter:instanceof(GitAdapter.__get()) then
+  -- Load review state if review mode is enabled
+  local cfg = config.get_config()
+  if cfg.review and cfg.review.enabled and self.adapter:instanceof(GitAdapter.__get()) then
+    local branch = self.adapter:get_current_branch()
+    local store = review_store.get_store()
+    self.review_state = store:load_state_sync(self.adapter, branch)
+  end
+
+  if cfg.watch_index and self.adapter:instanceof(GitAdapter.__get()) then
     self.watcher = vim.loop.new_fs_poll()
     self.watcher:start(
       self.adapter.ctx.dir .. "/index",
@@ -549,6 +559,23 @@ end
 ---@return boolean
 function DiffView:is_valid()
   return self.valid
+end
+
+---Get the review status for a file entry.
+---@param file_entry FileEntry
+---@return "unreviewed"|"reviewed"|"changed"|nil status The review status, or nil if review is disabled
+function DiffView:get_file_review_status(file_entry)
+  if not self.review_state then
+    return nil
+  end
+
+  if not file_entry or not file_entry.path then
+    return nil
+  end
+
+  -- Get the current blob hash to compare against the stored hash
+  local current_blob_hash = self.adapter:file_blob_hash(file_entry.path, "HEAD")
+  return self.review_state:get_file_status(file_entry.path, current_blob_hash)
 end
 
 M.DiffView = DiffView

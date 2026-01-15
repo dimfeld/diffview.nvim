@@ -111,6 +111,10 @@ M.defaults = {
       win_opts = {}
     },
   },
+  review = {
+    enabled = true,
+    cache_dir = nil, -- Falls back to ~/.cache/diffview.nvim/reviews/
+  },
   default_args = {
     DiffviewOpen = {},
     DiffviewFileHistory = {},
