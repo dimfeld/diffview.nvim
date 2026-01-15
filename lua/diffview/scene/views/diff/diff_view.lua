@@ -48,6 +48,7 @@ local M = {}
 ---@field valid boolean
 ---@field watcher uv_fs_poll_t # UV fs poll handle.
 ---@field review_state? ReviewState # Review state for tracking reviewed files.
+---@field review_event_callbacks? table<string, function> # Callbacks for review event cleanup.
 local DiffView = oop.create_class("DiffView", StandardView.__get())
 
 ---DiffView constructor
@@ -116,6 +117,7 @@ function DiffView:post_open()
   end
 
   self:init_event_listeners()
+  self:init_review_event_listeners()
 
   vim.schedule(function()
     self:file_safeguard()
@@ -185,6 +187,14 @@ end
 function DiffView:close()
   if not self.closing:check() then
     self.closing:send()
+
+    -- Clean up review event listeners
+    if self.review_event_callbacks then
+      DiffviewGlobal.emitter:off(self.review_event_callbacks.file_marked)
+      DiffviewGlobal.emitter:off(self.review_event_callbacks.file_cleared)
+      DiffviewGlobal.emitter:off(self.review_event_callbacks.all_cleared)
+      self.review_event_callbacks = nil
+    end
 
     if self.watcher then
       self.watcher:stop()
@@ -537,6 +547,41 @@ function DiffView:init_event_listeners()
   for event, callback in pairs(listeners) do
     self.emitter:on(event, callback)
   end
+end
+
+---Subscribe to global review events to refresh the panel when review state changes.
+function DiffView:init_review_event_listeners()
+  -- Store callbacks for cleanup
+  self.review_event_callbacks = {}
+
+  local function refresh_panel()
+    if self.panel:is_open() then
+      self.panel:render()
+      self.panel:redraw()
+    end
+  end
+
+  self.review_event_callbacks.file_marked = function(_, payload)
+    if payload.view == self then
+      refresh_panel()
+    end
+  end
+
+  self.review_event_callbacks.file_cleared = function(_, payload)
+    if payload.view == self then
+      refresh_panel()
+    end
+  end
+
+  self.review_event_callbacks.all_cleared = function(_, payload)
+    if payload.view == self then
+      refresh_panel()
+    end
+  end
+
+  DiffviewGlobal.emitter:on("review_file_marked", self.review_event_callbacks.file_marked)
+  DiffviewGlobal.emitter:on("review_file_cleared", self.review_event_callbacks.file_cleared)
+  DiffviewGlobal.emitter:on("review_all_cleared", self.review_event_callbacks.all_cleared)
 end
 
 ---Infer the current selected file. If the file panel is focused: return the
