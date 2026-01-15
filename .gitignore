@@ -1,3 +1,9 @@
 /doc/tags
 /.tests/
 /.dev/
+
+# rmplan generated files
+.rmfilter/reviews
+.rmfilter/config/rmplan.local.yml
+
+.claude/settings.local.json

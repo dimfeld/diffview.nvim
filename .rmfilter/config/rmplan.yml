@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/dimfeld/llmutils/main/schema/rmplan-config-schema.json
+
+paths:
+  tasks: tasks
+defaultExecutor: claude-code
+review:
+  defaultExecutor: claude-code
+prCreation:
+  draft: true
