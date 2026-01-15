@@ -5,7 +5,7 @@ goal: ""
 id: 7
 uuid: 9ce60301-7529-43d4-a46d-27c75a43f4d8
 generatedBy: agent
-status: in_progress
+status: done
 priority: medium
 dependencies:
   - 3
@@ -16,7 +16,7 @@ references:
 planGeneratedAt: 2026-01-15T22:50:19.842Z
 promptsGeneratedAt: 2026-01-15T22:50:19.842Z
 createdAt: 2026-01-15T01:45:14.237Z
-updatedAt: 2026-01-15T22:59:46.713Z
+updatedAt: 2026-01-15T23:01:38.308Z
 tasks:
   - title: Add action names to actions.lua
     done: true
@@ -48,7 +48,7 @@ tasks:
       behavior, count support, edge cases (no matches, review disabled), and
       position feedback"
   - title: Update documentation
-    done: false
+    done: true
     description: Update doc/diffview.txt with new keybindings and actions. Update
       USAGE.md with Review Navigation section explaining the new commands.
 changedFiles:
@@ -56,6 +56,7 @@ changedFiles:
   - AGENTS.md
   - CLAUDE.md
   - README.md
+  - USAGE.md
   - doc/diffview.txt
   - doc/diffview_defaults.txt
   - lua/diffview/actions.lua
@@ -546,8 +547,7 @@ Vim count prefixes (e.g., `2]r` skips two files) and wrap around at list boundar
 
 ## Current Progress
 ### Current State
-- Tasks 1-5 completed: Navigation commands for review mode are fully implemented and tested
-- One task remaining: Update documentation (doc/diffview.txt and USAGE.md)
+- All tasks completed: Navigation commands for review mode are fully implemented, tested, and documented
 
 ### Completed (So Far)
 - Added four action names to `actions.lua`: `review_next_pending`, `review_prev_pending`, `review_next_unreviewed`, `review_prev_unreviewed`
@@ -556,13 +556,14 @@ Vim count prefixes (e.g., `2]r` skips two files) and wrap around at list boundar
 - Added default keybindings (`]r`/`[r` for pending, `]R`/`[R` for unreviewed-only) to both `view` and `file_panel` sections in `config.lua`
 - Updated `doc/diffview_defaults.txt` with the new keybindings
 - Created comprehensive test suite in `review_navigation_spec.lua` (26 tests)
+- Updated `doc/diffview.txt` with new actions documentation (review_next_pending, review_prev_pending, review_next_unreviewed, review_prev_unreviewed)
+- Added "Navigating Between Files Pending Review" section to `USAGE.md`
 
 ### Remaining
-- Task 6: Update documentation (doc/diffview.txt and USAGE.md)
+- None
 
 ### Next Iteration Guidance
-- Add keybindings and actions to doc/diffview.txt
-- Add Review Navigation section to USAGE.md
+- None - plan is complete
 
 ### Decisions / Changes
 - Navigation methods follow the `next_conflict`/`prev_conflict` pattern for position feedback
