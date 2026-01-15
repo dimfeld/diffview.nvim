@@ -558,6 +558,7 @@ Vim count prefixes (e.g., `2]r` skips two files) and wrap around at list boundar
 - Created comprehensive test suite in `review_navigation_spec.lua` (26 tests)
 - Updated `doc/diffview.txt` with new actions documentation (review_next_pending, review_prev_pending, review_next_unreviewed, review_prev_unreviewed)
 - Added "Navigating Between Files Pending Review" section to `USAGE.md`
+- Removed unused `matching_indices` table from `_navigate_review_file()` (dead code cleanup)
 
 ### Remaining
 - None
