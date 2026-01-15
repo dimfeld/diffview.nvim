@@ -343,5 +343,17 @@ return function(view)
       if not file then return end
       review.clear_file_review(view, file)
     end,
+    review_next_pending = function()
+      view:next_pending_review_file()
+    end,
+    review_prev_pending = function()
+      view:prev_pending_review_file()
+    end,
+    review_next_unreviewed = function()
+      view:next_unreviewed_file()
+    end,
+    review_prev_unreviewed = function()
+      view:prev_unreviewed_file()
+    end,
   }
 end

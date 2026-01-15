@@ -14,6 +14,7 @@ local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|Lazy
 local StandardView = lazy.access("diffview.scene.views.standard.standard_view", "StandardView") ---@type StandardView|LazyModule
 local config = lazy.require("diffview.config") ---@module "diffview.config"
 local debounce = lazy.require("diffview.debounce") ---@module "diffview.debounce"
+local review = lazy.require("diffview.review") ---@module "diffview.review"
 local review_store = lazy.require("diffview.review_store") ---@module "diffview.review_store"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 local vcs_utils = lazy.require("diffview.vcs.utils") ---@module "diffview.vcs.utils"
@@ -624,6 +625,113 @@ function DiffView:get_file_review_status(file_entry)
   -- Get the current blob hash to compare against the stored hash
   local current_blob_hash = self.adapter:file_blob_hash(file_entry.path, "HEAD")
   return self.review_state:get_file_status(file_entry.path, current_blob_hash)
+end
+
+---Helper function to navigate to files matching a review status filter.
+---@param delta integer Direction to navigate (+1 for next, -1 for previous)
+---@param status_filter fun(status: string|nil): boolean Function to filter files by status
+---@param label string Label for the status message (e.g., "Pending review", "Unreviewed")
+---@return FileEntry|nil target_file The file navigated to, or nil if none found
+---@private
+function DiffView:_navigate_review_file(delta, status_filter, label)
+  self:ensure_layout()
+
+  if self:file_safeguard() then return nil end
+
+  if not self.review_state then
+    utils.info("Review mode is not enabled")
+    return nil
+  end
+
+  local files = self.panel:ordered_file_list()
+  if #files == 0 then
+    return nil
+  end
+
+  -- Build list of files matching the filter
+  local matching_files = {}
+  local matching_indices = {}
+  for i, file in ipairs(files) do
+    local status = review.get_file_status(self, file)
+    if status_filter(status) then
+      matching_files[#matching_files + 1] = file
+      matching_indices[#matching_indices + 1] = i
+    end
+  end
+
+  if #matching_files == 0 then
+    utils.info(("No %s files"):format(label:lower()))
+    return nil
+  end
+
+  -- Find current position in the matching files list
+  local cur_file = self.panel.cur_file
+  local cur_matching_idx = 0
+  for i, file in ipairs(matching_files) do
+    if file == cur_file then
+      cur_matching_idx = i
+      break
+    end
+  end
+
+  -- Calculate next position using count and modulo for wrapping
+  local count = vim.v.count1
+  local next_idx
+
+  if cur_matching_idx == 0 then
+    -- Current file is not in the matching list, go to first match in direction
+    if delta > 0 then
+      next_idx = 1
+    else
+      next_idx = #matching_files
+    end
+  else
+    next_idx = (cur_matching_idx + delta * count - 1) % #matching_files + 1
+  end
+
+  local target_file = matching_files[next_idx]
+
+  -- Navigate to the file
+  self.panel:set_cur_file(target_file)
+  self.panel:highlight_file(target_file)
+  self:_set_file(target_file)
+
+  -- Show position message
+  api.nvim_echo({{ ("%s [%d/%d]"):format(label, next_idx, #matching_files) }}, false, {})
+
+  return target_file
+end
+
+---Navigate to the next file pending review (unreviewed or changed).
+---@return FileEntry|nil
+function DiffView:next_pending_review_file()
+  return self:_navigate_review_file(1, function(status)
+    return status == "unreviewed" or status == "changed"
+  end, "Pending review")
+end
+
+---Navigate to the previous file pending review (unreviewed or changed).
+---@return FileEntry|nil
+function DiffView:prev_pending_review_file()
+  return self:_navigate_review_file(-1, function(status)
+    return status == "unreviewed" or status == "changed"
+  end, "Pending review")
+end
+
+---Navigate to the next unreviewed file (never reviewed).
+---@return FileEntry|nil
+function DiffView:next_unreviewed_file()
+  return self:_navigate_review_file(1, function(status)
+    return status == "unreviewed"
+  end, "Unreviewed")
+end
+
+---Navigate to the previous unreviewed file (never reviewed).
+---@return FileEntry|nil
+function DiffView:prev_unreviewed_file()
+  return self:_navigate_review_file(-1, function(status)
+    return status == "unreviewed"
+  end, "Unreviewed")
 end
 
 M.DiffView = DiffView
