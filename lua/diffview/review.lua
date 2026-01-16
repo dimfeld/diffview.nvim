@@ -237,4 +237,53 @@ function M.get_store()
   return review_store.get_store()
 end
 
+---Preview what stale reviews would be cleaned up (dry run)
+---@param view DiffView
+---@return CleanupResult
+function M.get_cleanup_preview(view)
+  if not is_review_enabled() then
+    return { deleted_branches = {}, deleted_count = 0, error = "Review is disabled" }
+  end
+
+  if not view or not view.adapter then
+    return { deleted_branches = {}, deleted_count = 0, error = "No adapter available" }
+  end
+
+  local cfg = config.get_config()
+  local max_age_days = cfg.review and cfg.review.cleanup_age_days or 30
+
+  local store = review_store.get_store()
+  return store:cleanup_stale_branches(view.adapter, { dry_run = true, max_age_days = max_age_days })
+end
+
+---Clean up stale reviews for the current repository
+---@param view DiffView
+---@return CleanupResult
+function M.cleanup_stale_reviews(view)
+  if not is_review_enabled() then
+    return { deleted_branches = {}, deleted_count = 0, error = "Review is disabled" }
+  end
+
+  if not view or not view.adapter then
+    return { deleted_branches = {}, deleted_count = 0, error = "No adapter available" }
+  end
+
+  local cfg = config.get_config()
+  local max_age_days = cfg.review and cfg.review.cleanup_age_days or 30
+
+  local store = review_store.get_store()
+  local result = store:cleanup_stale_branches(view.adapter, { dry_run = false, max_age_days = max_age_days })
+
+  if result.deleted_count > 0 then
+    -- Emit event for UI updates and user notification
+    DiffviewGlobal.emitter:emit("review_cleanup_completed", {
+      view = view,
+      deleted_branches = result.deleted_branches,
+      deleted_count = result.deleted_count,
+    })
+  end
+
+  return result
+end
+
 return M
