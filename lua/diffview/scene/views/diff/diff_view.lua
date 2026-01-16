@@ -70,10 +70,7 @@ function DiffView:init(opt)
   self.review_filter_enabled = false
   self.since_review_mode = false
   self.options.selected_file = self.options.selected_file
-    and pl:chain(self.options.selected_file)
-        :absolute()
-        :relative(self.adapter.ctx.toplevel)
-        :get()
+    and pl:chain(self.options.selected_file):absolute():relative(self.adapter.ctx.toplevel):get()
 
   self:super({
     panel = FilePanel(
@@ -127,9 +124,7 @@ function DiffView:post_open()
       ---@diagnostic disable-next-line: unused-local
       vim.schedule_wrap(function(err, prev, cur)
         if not err then
-          if self:is_cur_tabpage() then
-            self:update_files()
-          end
+          if self:is_cur_tabpage() then self:update_files() end
         end
       end)
     )
@@ -140,9 +135,7 @@ function DiffView:post_open()
 
   vim.schedule(function()
     self:file_safeguard()
-    if self.files:len() == 0 then
-      self:update_files()
-    end
+    if self.files:len() == 0 then self:update_files() end
     self.ready = true
   end)
 end
@@ -184,20 +177,17 @@ function DiffView:file_open_post(e, new_entry, old_entry)
         end)
       )
 
-      api.nvim_create_autocmd(
-        { "TextChanged", "TextChangedI" },
-        {
-          buffer = file.bufnr,
-          callback = function()
-            if not self.attached_bufs[file.bufnr] then
-              work:close()
-              return true
-            end
+      api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+        buffer = file.bufnr,
+        callback = function()
+          if not self.attached_bufs[file.bufnr] then
+            work:close()
+            return true
+          end
 
-            work()
-          end,
-        }
-      )
+          work()
+        end,
+      })
     end
   end
 end
@@ -258,12 +248,11 @@ DiffView._create_since_review_entry = function(self, file, review_entry)
     if pos == "left" then
       -- Retrieve content directly from the blob hash
       local out, code = adapter:exec_sync({
-        "show", blob_hash,
+        "show",
+        blob_hash,
       }, { cwd = adapter.ctx.toplevel, silent = true })
 
-      if code == 0 and out then
-        return out
-      end
+      if code == 0 and out then return out end
       -- Return empty on error (will show as empty file in diff)
       return {}
     else
@@ -273,22 +262,20 @@ DiffView._create_since_review_entry = function(self, file, review_entry)
       if right_rev and right_rev.commit then
         local rev_spec = fmt("%s:%s", right_rev.commit, path)
         local out, code = adapter:exec_sync({
-          "show", rev_spec,
+          "show",
+          rev_spec,
         }, { cwd = adapter.ctx.toplevel, silent = true })
 
-        if code == 0 and out then
-          return out
-        end
+        if code == 0 and out then return out end
       elseif right_rev and right_rev.stage then
         -- Handle staged files
         local rev_spec = fmt(":%d:%s", right_rev.stage, path)
         local out, code = adapter:exec_sync({
-          "show", rev_spec,
+          "show",
+          rev_spec,
         }, { cwd = adapter.ctx.toplevel, silent = true })
 
-        if code == 0 and out then
-          return out
-        end
+        if code == 0 and out then return out end
       end
       -- Return empty if we can't get content
       return {}
@@ -339,7 +326,7 @@ DiffView._set_file = async.void(function(self, file)
         entry_to_use:set_active(true)
         using_since_review = true
         -- Show indicator that we're viewing since-review diff
-        api.nvim_echo({{ "[Since review]", "Comment" }}, false, {})
+        api.nvim_echo({ { "[Since review]", "Comment" } }, false, {})
       elseif err then
         -- Fall back to full diff and warn user
         utils.info(fmt("Since-review mode: %s - showing full diff", err))
@@ -372,9 +359,7 @@ function DiffView:next_file(highlight)
     local cur = self.panel:next_file()
 
     if cur then
-      if highlight or not self.panel:is_focused() then
-        self.panel:highlight_file(cur)
-      end
+      if highlight or not self.panel:is_focused() then self.panel:highlight_file(cur) end
 
       self:_set_file(cur)
 
@@ -395,9 +380,7 @@ function DiffView:prev_file(highlight)
     local cur = self.panel:prev_file()
 
     if cur then
-      if highlight or not self.panel:is_focused() then
-        self.panel:highlight_file(cur)
-      end
+      if highlight or not self.panel:is_focused() then self.panel:highlight_file(cur) end
 
       self:_set_file(cur)
 
@@ -421,15 +404,11 @@ DiffView.set_file = async.void(function(self, file, focus, highlight)
     if f == file then
       self.panel:set_cur_file(file)
 
-      if highlight or not self.panel:is_focused() then
-        self.panel:highlight_file(file)
-      end
+      if highlight or not self.panel:is_focused() then self.panel:highlight_file(file) end
 
       await(self:_set_file(file))
 
-      if focus then
-        api.nvim_set_current_win(self.cur_layout:get_main_win().id)
-      end
+      if focus then api.nvim_set_current_win(self.cur_layout:get_main_win().id) end
     end
   end
   ---@diagnostic enable: invisible
@@ -453,20 +432,14 @@ end)
 ---Get an updated list of files.
 ---@param self DiffView
 ---@param callback fun(err?: string[], files: FileDict)
-DiffView.get_updated_files = async.wrap(function(self, callback)
-  vcs_utils.diff_file_list(
-    self.adapter,
-    self.left,
-    self.right,
-    self.path_args,
-    self.options,
-    {
+DiffView.get_updated_files = async.wrap(
+  function(self, callback)
+    vcs_utils.diff_file_list(self.adapter, self.left, self.right, self.path_args, self.options, {
       default_layout = DiffView.get_default_layout(),
       merge_layout = DiffView.get_default_merge_layout(),
-    },
-    callback
-  )
-end)
+    }, callback)
+  end
+)
 
 ---Update the file list, including stats and status for all files.
 DiffView.update_files = debounce.debounce_trailing(
@@ -533,9 +506,11 @@ DiffView.update_files = debounce.debounce_trailing(
       -- exist in both lists.
       ---@param aa FileEntry
       ---@param bb FileEntry
-      local diff = Diff(v.cur_files, v.new_files, function(aa, bb)
-        return aa.path == bb.path and aa.oldpath == bb.oldpath
-      end)
+      local diff = Diff(
+        v.cur_files,
+        v.new_files,
+        function(aa, bb) return aa.path == bb.path and aa.oldpath == bb.oldpath end
+      )
 
       local script = diff:create_edit_script()
       local ai = 1
@@ -556,13 +531,10 @@ DiffView.update_files = debounce.debounce_trailing(
           v.cur_files[ai].status = v.new_files[bi].status
           v.cur_files[ai]:validate_stage_buffers(index_stat)
 
-          if new_head then
-            v.cur_files[ai]:update_heads(new_head)
-          end
+          if new_head then v.cur_files[ai]:update_heads(new_head) end
 
           ai = ai + 1
           bi = bi + 1
-
         elseif opr == EditToken.DELETE then
           if self.panel.cur_file == v.cur_files[ai] then
             local file_list = self.panel:ordered_file_list()
@@ -575,12 +547,10 @@ DiffView.update_files = debounce.debounce_trailing(
 
           v.cur_files[ai]:destroy()
           table.remove(v.cur_files, ai)
-
         elseif opr == EditToken.INSERT then
           table.insert(v.cur_files, ai, v.new_files[bi])
           ai = ai + 1
           bi = bi + 1
-
         elseif opr == EditToken.REPLACE then
           if self.panel.cur_file == v.cur_files[ai] then
             local file_list = self.panel:ordered_file_list()
@@ -653,9 +623,7 @@ function DiffView:file_safeguard()
   if self.files:len() == 0 then
     local cur = self.panel.cur_file
 
-    if cur then
-      cur.layout:detach_files()
-    end
+    if cur then cur.layout:detach_files() end
 
     self.cur_layout:open_null()
     self.nulled = true
@@ -665,9 +633,7 @@ function DiffView:file_safeguard()
   return false
 end
 
-function DiffView:on_files_staged(callback)
-  self.emitter:on(EventName.FILES_STAGED, callback)
-end
+function DiffView:on_files_staged(callback) self.emitter:on(EventName.FILES_STAGED, callback) end
 
 function DiffView:init_event_listeners()
   local listeners = require("diffview.scene.views.diff.listeners")(self)
@@ -701,24 +667,20 @@ function DiffView:init_review_event_listeners()
           self.panel:update_components()
           self.panel:render()
           self.panel:redraw()
-          api.nvim_echo({{ "All files reviewed - filter disabled" }}, false, {})
+          api.nvim_echo({ { "All files reviewed - filter disabled" } }, false, {})
         end
       end
     end
   end
 
   self.review_event_callbacks.file_cleared = function(_, payload)
-    if payload.view == self then
-      refresh_panel()
-    end
+    if payload.view == self then refresh_panel() end
   end
 
   self.review_event_callbacks.all_cleared = function(_, payload)
     if payload.view == self then
       -- Disable review filter if active since there's nothing to filter
-      if self.review_filter_enabled then
-        self.review_filter_enabled = false
-      end
+      if self.review_filter_enabled then self.review_filter_enabled = false end
       refresh_panel()
     end
   end
@@ -726,9 +688,7 @@ function DiffView:init_review_event_listeners()
   self.review_event_callbacks.repo_cleared = function(_, payload)
     if payload.view == self then
       -- Disable review filter if active since there's nothing to filter
-      if self.review_filter_enabled then
-        self.review_filter_enabled = false
-      end
+      if self.review_filter_enabled then self.review_filter_enabled = false end
       refresh_panel()
     end
   end
@@ -760,21 +720,15 @@ end
 
 ---Check whether or not the instantiation was successful.
 ---@return boolean
-function DiffView:is_valid()
-  return self.valid
-end
+function DiffView:is_valid() return self.valid end
 
 ---Get the review status for a file entry.
 ---@param file_entry FileEntry
 ---@return "unreviewed"|"reviewed"|"changed"|nil status The review status, or nil if review is disabled
 function DiffView:get_file_review_status(file_entry)
-  if not self.review_state then
-    return nil
-  end
+  if not self.review_state then return nil end
 
-  if not file_entry or not file_entry.path then
-    return nil
-  end
+  if not file_entry or not file_entry.path then return nil end
 
   -- Get the current blob hash to compare against the stored hash
   local current_blob_hash = self.adapter:file_blob_hash(file_entry.path, "HEAD")
@@ -798,17 +752,13 @@ function DiffView:_navigate_review_file(delta, status_filter, label)
   end
 
   local files = self.panel:ordered_file_list()
-  if #files == 0 then
-    return nil
-  end
+  if #files == 0 then return nil end
 
   -- Build list of files matching the filter
   local matching_files = {}
   for _, file in ipairs(files) do
     local status = review.get_file_status(self, file)
-    if status_filter(status) then
-      matching_files[#matching_files + 1] = file
-    end
+    if status_filter(status) then matching_files[#matching_files + 1] = file end
   end
 
   if #matching_files == 0 then
@@ -849,7 +799,7 @@ function DiffView:_navigate_review_file(delta, status_filter, label)
   self:_set_file(target_file)
 
   -- Show position message
-  api.nvim_echo({{ ("%s [%d/%d]"):format(label, next_idx, #matching_files) }}, false, {})
+  api.nvim_echo({ { ("%s [%d/%d]"):format(label, next_idx, #matching_files) } }, false, {})
 
   return target_file
 end
@@ -857,33 +807,41 @@ end
 ---Navigate to the next file pending review (unreviewed or changed).
 ---@return FileEntry|nil
 function DiffView:next_pending_review_file()
-  return self:_navigate_review_file(1, function(status)
-    return status == "unreviewed" or status == "changed"
-  end, "Pending review")
+  return self:_navigate_review_file(
+    1,
+    function(status) return status == "unreviewed" or status == "changed" end,
+    "Pending review"
+  )
 end
 
 ---Navigate to the previous file pending review (unreviewed or changed).
 ---@return FileEntry|nil
 function DiffView:prev_pending_review_file()
-  return self:_navigate_review_file(-1, function(status)
-    return status == "unreviewed" or status == "changed"
-  end, "Pending review")
+  return self:_navigate_review_file(
+    -1,
+    function(status) return status == "unreviewed" or status == "changed" end,
+    "Pending review"
+  )
 end
 
 ---Navigate to the next unreviewed file (never reviewed).
 ---@return FileEntry|nil
 function DiffView:next_unreviewed_file()
-  return self:_navigate_review_file(1, function(status)
-    return status == "unreviewed"
-  end, "Unreviewed")
+  return self:_navigate_review_file(
+    1,
+    function(status) return status == "unreviewed" end,
+    "Unreviewed"
+  )
 end
 
 ---Navigate to the previous unreviewed file (never reviewed).
 ---@return FileEntry|nil
 function DiffView:prev_unreviewed_file()
-  return self:_navigate_review_file(-1, function(status)
-    return status == "unreviewed"
-  end, "Unreviewed")
+  return self:_navigate_review_file(
+    -1,
+    function(status) return status == "unreviewed" end,
+    "Unreviewed"
+  )
 end
 
 ---Toggle the review filter to show only files pending review.
@@ -912,7 +870,7 @@ function DiffView:toggle_review_filter()
       self.panel:update_components()
       self.panel:render()
       self.panel:redraw()
-      api.nvim_echo({{ "All files reviewed - filter disabled" }}, false, {})
+      api.nvim_echo({ { "All files reviewed - filter disabled" } }, false, {})
       return
     end
 
@@ -933,9 +891,20 @@ function DiffView:toggle_review_filter()
       end
     end
 
-    api.nvim_echo({{ ("Review filter ON: showing %d/%d files pending review"):format(#visible_files, total_files) }}, false, {})
+    api.nvim_echo(
+      {
+        {
+          ("Review filter ON: showing %d/%d files pending review"):format(
+            #visible_files,
+            total_files
+          ),
+        },
+      },
+      false,
+      {}
+    )
   else
-    api.nvim_echo({{ "Review filter OFF: showing all files" }}, false, {})
+    api.nvim_echo({ { "Review filter OFF: showing all files" } }, false, {})
   end
 end
 
@@ -943,11 +912,11 @@ end
 ---@param commit_hash string The commit hash to verify
 ---@return boolean exists True if the commit exists
 function DiffView:verify_commit_exists(commit_hash)
-  if not commit_hash then
-    return false
-  end
+  if not commit_hash then return false end
   local _, code = self.adapter:exec_sync({
-    "cat-file", "-e", commit_hash,
+    "cat-file",
+    "-e",
+    commit_hash,
   }, self.adapter.ctx.toplevel)
   return code == 0
 end
@@ -956,11 +925,11 @@ end
 ---@param blob_hash string The blob hash to verify
 ---@return boolean exists True if the blob exists
 function DiffView:verify_blob_exists(blob_hash)
-  if not blob_hash then
-    return false
-  end
+  if not blob_hash then return false end
   local _, code = self.adapter:exec_sync({
-    "cat-file", "-e", blob_hash,
+    "cat-file",
+    "-e",
+    blob_hash,
   }, self.adapter.ctx.toplevel)
   return code == 0
 end
@@ -981,19 +950,13 @@ function DiffView:toggle_since_review_mode()
   -- to show only files that need attention (unreviewed or changed)
   -- When disabling, also disable the filter to show all files again
   if self.since_review_mode then
-    if not self.review_filter_enabled then
-      self.review_filter_enabled = true
-    end
+    if not self.review_filter_enabled then self.review_filter_enabled = true end
   else
-    if self.review_filter_enabled then
-      self.review_filter_enabled = false
-    end
+    if self.review_filter_enabled then self.review_filter_enabled = false end
   end
 
   -- Update components to refresh the file tree (needed for both ON and OFF)
-  if self.panel and self.panel.update_components then
-    self.panel:update_components()
-  end
+  if self.panel and self.panel.update_components then self.panel:update_components() end
 
   -- Provide feedback about the mode change
   if self.since_review_mode then
@@ -1002,12 +965,22 @@ function DiffView:toggle_since_review_mode()
     if self.panel and self.panel.ordered_file_list then
       visible_count = #self.panel:ordered_file_list()
     end
-    if self.files and self.files.len then
-      total_count = self.files:len()
-    end
-    api.nvim_echo({{ fmt("Since-review mode ON: showing %d/%d files (changed files show diff since last review)", visible_count, total_count) }}, false, {})
+    if self.files and self.files.len then total_count = self.files:len() end
+    api.nvim_echo(
+      {
+        {
+          fmt(
+            "Since-review mode ON: showing %d/%d files (changed files show diff since last review)",
+            visible_count,
+            total_count
+          ),
+        },
+      },
+      false,
+      {}
+    )
   else
-    api.nvim_echo({{ "Since-review mode OFF: showing full diff" }}, false, {})
+    api.nvim_echo({ { "Since-review mode OFF: showing full diff" } }, false, {})
   end
 
   -- Re-open the current file to reflect the new mode if it has "changed" status
@@ -1017,8 +990,6 @@ function DiffView:toggle_since_review_mode()
       self:_set_file(self.cur_entry)
     elseif self.since_review_mode then
       -- Current file is not "changed" - show info and try to navigate to a changed file
-      utils.info("Since-review mode only affects files with 'changed' status")
-
       if self.panel and self.panel.ordered_file_list then
         -- Current file might be filtered out, navigate to first visible file
         local visible_files = self.panel:ordered_file_list()
@@ -1054,22 +1025,14 @@ end
 ---@return ReviewEntry|nil review_entry The review entry if valid for since-review mode
 ---@return string|nil error_message Error message if since-review is not available
 function DiffView:get_since_review_entry(file_entry)
-  if not self.review_state then
-    return nil, "Review mode is not enabled"
-  end
+  if not self.review_state then return nil, "Review mode is not enabled" end
 
-  if not file_entry or not file_entry.path then
-    return nil, "Invalid file entry"
-  end
+  if not file_entry or not file_entry.path then return nil, "Invalid file entry" end
 
   local review_entry = self.review_state:get_file(file_entry.path)
-  if not review_entry then
-    return nil, "File has not been reviewed"
-  end
+  if not review_entry then return nil, "File has not been reviewed" end
 
-  if not review_entry.blob_hash then
-    return nil, "Review was saved without blob information"
-  end
+  if not review_entry.blob_hash then return nil, "Review was saved without blob information" end
 
   -- Verify the blob still exists (blobs are more resilient than commits)
   if not self:verify_blob_exists(review_entry.blob_hash) then
