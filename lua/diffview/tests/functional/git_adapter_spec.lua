@@ -140,4 +140,134 @@ describe("diffview.vcs.adapters.git", function()
       eq("unknown", branch)
     end)
   end)
+
+  describe("GitAdapter:get_all_branches()", function()
+    -- Helper to create a mock adapter for get_all_branches tests
+    local function create_mock_adapter(options)
+      options = options or {}
+
+      local mock = {
+        ctx = {
+          toplevel = options.toplevel or "/mock/repo",
+        },
+        exec_sync = function(self, args, opts)
+          -- Handle git for-each-ref command
+          if args[1] == "for-each-ref" and args[2] == "--format=%(refname:short)" then
+            if options.command_fails then
+              return {}, options.exit_code or 128
+            end
+            return options.output or {}, 0
+          end
+          return {}, 1
+        end,
+      }
+
+      setmetatable(mock, { __index = GitAdapter })
+      return mock
+    end
+
+    it("returns branch names for local branches", function()
+      local adapter = create_mock_adapter({
+        output = { "main", "develop", "feature/login" },
+      })
+
+      local branches = adapter:get_all_branches()
+      neq(nil, branches)
+      eq(true, vim.tbl_contains(branches, "main"))
+      eq(true, vim.tbl_contains(branches, "develop"))
+      eq(true, vim.tbl_contains(branches, "feature/login"))
+    end)
+
+    it("filters out empty lines in output", function()
+      local adapter = create_mock_adapter({
+        output = { "main", "", "develop", "", "" },
+      })
+
+      local branches = adapter:get_all_branches()
+      neq(nil, branches)
+      -- Should only contain non-empty branches
+      eq(2, #branches)
+      eq(true, vim.tbl_contains(branches, "main"))
+      eq(true, vim.tbl_contains(branches, "develop"))
+    end)
+
+    it("returns nil when git command fails", function()
+      local adapter = create_mock_adapter({
+        command_fails = true,
+        exit_code = 128,
+      })
+
+      local branches = adapter:get_all_branches()
+      eq(nil, branches)
+    end)
+
+    it("extracts short forms from remote branches", function()
+      local adapter = create_mock_adapter({
+        output = { "main", "origin/main", "origin/feature/test" },
+      })
+
+      local branches = adapter:get_all_branches()
+      neq(nil, branches)
+      -- Should contain both full remote names and short forms
+      eq(true, vim.tbl_contains(branches, "origin/main"))
+      eq(true, vim.tbl_contains(branches, "main"))
+      eq(true, vim.tbl_contains(branches, "origin/feature/test"))
+      eq(true, vim.tbl_contains(branches, "feature/test"))
+    end)
+
+    it("deduplicates branches that appear both locally and remotely", function()
+      local adapter = create_mock_adapter({
+        output = { "main", "origin/main" },
+      })
+
+      local branches = adapter:get_all_branches()
+      neq(nil, branches)
+      -- "main" should only appear once even though it's both local and extracted from origin/main
+      local main_count = 0
+      for _, branch in ipairs(branches) do
+        if branch == "main" then
+          main_count = main_count + 1
+        end
+      end
+      eq(1, main_count)
+    end)
+
+    it("handles empty output gracefully", function()
+      local adapter = create_mock_adapter({
+        output = {},
+      })
+
+      local branches = adapter:get_all_branches()
+      neq(nil, branches)
+      eq(0, #branches)
+    end)
+
+    it("handles nil output gracefully", function()
+      local adapter = create_mock_adapter({})
+      -- Override to return nil explicitly
+      adapter.exec_sync = function(self, args, opts)
+        if args[1] == "for-each-ref" then
+          return nil, 0
+        end
+        return {}, 1
+      end
+
+      local branches = adapter:get_all_branches()
+      neq(nil, branches)
+      eq(0, #branches)
+    end)
+
+    it("handles multiple remote origins", function()
+      local adapter = create_mock_adapter({
+        output = { "main", "origin/main", "upstream/main", "origin/feature/x" },
+      })
+
+      local branches = adapter:get_all_branches()
+      neq(nil, branches)
+      eq(true, vim.tbl_contains(branches, "origin/main"))
+      eq(true, vim.tbl_contains(branches, "upstream/main"))
+      eq(true, vim.tbl_contains(branches, "main"))
+      eq(true, vim.tbl_contains(branches, "feature/x"))
+    end)
+  end)
 end)
