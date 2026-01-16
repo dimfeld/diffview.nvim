@@ -5,7 +5,7 @@ goal: ""
 id: 8
 uuid: 23bead4b-525b-482d-bf0c-51757bee0793
 generatedBy: agent
-status: in_progress
+status: done
 priority: medium
 dependencies:
   - 9
@@ -16,7 +16,7 @@ references:
 planGeneratedAt: 2026-01-16T10:13:56.188Z
 promptsGeneratedAt: 2026-01-16T10:13:56.188Z
 createdAt: 2026-01-15T01:45:14.898Z
-updatedAt: 2026-01-16T10:49:53.957Z
+updatedAt: 2026-01-16T10:57:52.370Z
 tasks:
   - title: Add branch listing methods to ReviewStore
     done: true
@@ -70,13 +70,13 @@ tasks:
       bang (!) for dry-run preview mode. Works with or without an active
       DiffView by creating a temporary adapter if needed.
   - title: Add auto-cleanup on DiffView open
-    done: false
+    done: true
     description: Add auto-cleanup logic to DiffView:post_open() in
       lua/diffview/scene/views/diff/diff_view.lua. When review.auto_cleanup is
       enabled, run cleanup asynchronously after view opens and show notification
       if files were cleaned.
   - title: Add cleanup event emitter
-    done: false
+    done: true
     description: Add DiffviewGlobal.emitter listener for review_cleanup_completed
       event in lua/diffview/init.lua that fires DiffviewReviewCleanupCompleted
       user autocommand.
@@ -864,10 +864,9 @@ Create comprehensive tests:
 
 ## Current Progress
 ### Current State
-- Core cleanup infrastructure complete (ReviewStore and GitAdapter methods)
-- Public cleanup API added to review.lua with full test coverage
-- Configuration options for cleanup added to config.lua
-- Manual cleanup workflow complete: action, listener, command, and documentation
+- All tasks complete - cleanup feature is fully implemented
+- 70 tests covering all cleanup functionality in review_cleanup_spec.lua
+- Full documentation for commands, actions, and user autocommands
 
 ### Completed (So Far)
 - Task 1: unsanitize_branch() helper and get_stored_branches(repo_id) in ReviewStore
@@ -879,22 +878,21 @@ Create comprehensive tests:
 - Task 7: review_cleanup action registered in actions.lua
 - Task 8: review_cleanup listener in listeners.lua with confirmation dialog
 - Task 9: DiffviewReviewCleanup command in plugin/diffview.lua (works with/without active view, supports dry-run via bang)
+- Task 10: Auto-cleanup on DiffView open in diff_view.lua's post_open() method
+- Task 11: Cleanup event emitter in init.lua that fires DiffviewReviewCleanupCompleted user autocommand
 - Task 12: Tests for branch listing methods
 - Task 13: Tests for timestamp extraction
 - Task 14: Tests for cleanup_stale_branches
-- Task 15: Tests for public cleanup API (63 tests total in review_cleanup_spec.lua)
-- Additional: Unit tests for GitAdapter:get_all_branches() added to git_adapter_spec.lua
-- Additional: Updated review_api_spec.lua integration test to include new cleanup functions
-- Additional: Documentation for command and action in doc/diffview.txt
+- Task 15: Tests for public cleanup API
+- Additional: Unit tests for GitAdapter:get_all_branches() in git_adapter_spec.lua
+- Additional: Tests for auto-cleanup and user autocommand emission (7 new tests)
+- Additional: Documentation for DiffviewReviewCleanupCompleted user autocommand in doc/diffview.txt
 
 ### Remaining
-- Task 10: Auto-cleanup on DiffView open in diff_view.lua
-- Task 11: Cleanup event emitter in init.lua
+- None
 
 ### Next Iteration Guidance
-- Tasks 10-11 (auto-cleanup, event emitter) are all that remain
-- Task 11 adds event emitter that task 10 relies on, but task 5's cleanup_stale_reviews already emits the event - task 11 just connects it to the user autocommand
-- Can implement both together as they complete the auto-cleanup feature
+- Plan complete
 
 ### Decisions / Changes
 - Double-underscore ambiguity handled by checking both possible branch names (conservative approach)
@@ -902,6 +900,7 @@ Create comprehensive tests:
 - Files with undeterminable timestamps are skipped (conservative behavior)
 - cleanup_stale_reviews emits review_cleanup_completed event only when files are actually deleted
 - Command works both with and without active DiffView - implements confirmation dialog inline when no view is active
+- Auto-cleanup runs via vim.schedule() to avoid blocking view opening
 
 ### Risks / Blockers
 - None

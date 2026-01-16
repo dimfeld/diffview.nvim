@@ -1559,6 +1559,13 @@ For information on how to use User autocommands, see |User|.
                       such that |:setlocal| will apply settings to the
                       relevant buffer / window.
 
+`DiffviewReviewCleanupCompleted`
+                      Fires after stale review data has been cleaned up. Only
+                      fires when at least one stale branch's review data was
+                      deleted. This event fires both for automatic cleanup
+                      (when `review.auto_cleanup` is enabled) and manual
+                      cleanup via `:DiffviewReviewCleanup`.
+
 ==============================================================================
 
 MAPS                                            *diffview-maps*
