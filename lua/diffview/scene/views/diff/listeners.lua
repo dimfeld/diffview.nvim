@@ -4,11 +4,14 @@ local lazy = require("diffview.lazy")
 local EventName = lazy.access("diffview.events", "EventName") ---@type EventName|LazyModule
 local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|LazyModule
 local actions = lazy.require("diffview.actions") ---@module "diffview.actions"
+local review = lazy.require("diffview.review") ---@module "diffview.review"
+local review_store = lazy.require("diffview.review_store") ---@module "diffview.review_store"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 local vcs_utils = lazy.require("diffview.vcs.utils") ---@module "diffview.vcs.utils"
 
 local api = vim.api
 local await = async.await
+local uv = vim.loop
 
 ---@param view DiffView
 return function(view)
@@ -328,6 +331,139 @@ return function(view)
       if not view.panel:is_focused() then return end
       local dir = view.panel:get_dir_at_cursor()
       if dir then view.panel:toggle_item_fold(dir) end
+    end,
+    review_mark_file = function()
+      local file = view:infer_cur_file()
+      if not file then return end
+      review.mark_file_reviewed(view, file)
+    end,
+    review_mark_all = function()
+      review.mark_all_reviewed(view)
+    end,
+    review_clear_file = function()
+      local file = view:infer_cur_file()
+      if not file then return end
+      review.clear_file_review(view, file)
+    end,
+    review_clear_all = function()
+      if not view.review_state then
+        utils.warn("No review state available for this view")
+        return
+      end
+
+      local file_count = vim.tbl_count(view.review_state.files)
+      if file_count == 0 then
+        utils.info("No files are currently marked as reviewed")
+        return
+      end
+
+      vim.ui.select({ "Yes", "No" }, {
+        prompt = ("Clear review state for %d file(s) on branch '%s'?"):format(
+          file_count,
+          view.review_state.branch
+        ),
+      }, function(choice)
+        if choice == "Yes" then
+          review.clear_all_reviews(view)
+        end
+      end)
+    end,
+    review_clear_repo = function()
+      local store = review_store.get_store()
+      local repo_id = store:get_repo_id(view.adapter)
+      if not repo_id then
+        utils.warn("Could not determine repository ID")
+        return
+      end
+
+      -- Count branches by scanning the repo directory
+      local cache_dir = store:get_cache_dir()
+      local repo_dir = utils.path:join(cache_dir, repo_id)
+      local branch_count = 0
+      local stat = utils.path:stat(repo_dir)
+      if stat and stat.type == "directory" then
+        local handle = uv.fs_scandir(repo_dir)
+        if handle then
+          while true do
+            local name = uv.fs_scandir_next(handle)
+            if not name then break end
+            if name:match("%.json$") then branch_count = branch_count + 1 end
+          end
+        end
+      end
+
+      if branch_count == 0 then
+        utils.info("No review state exists for this repository")
+        return
+      end
+
+      vim.ui.select({ "Yes", "No" }, {
+        prompt = ("Clear review state for %d branch(es) in this repository?"):format(branch_count),
+      }, function(choice)
+        if choice == "Yes" then
+          review.clear_repo_reviews(view)
+        end
+      end)
+    end,
+    review_next_pending = function()
+      view:next_pending_review_file()
+    end,
+    review_prev_pending = function()
+      view:prev_pending_review_file()
+    end,
+    review_next_unreviewed = function()
+      view:next_unreviewed_file()
+    end,
+    review_prev_unreviewed = function()
+      view:prev_unreviewed_file()
+    end,
+    review_toggle_filter = function()
+      view:toggle_review_filter()
+    end,
+    review_toggle_since_review = function()
+      view:toggle_since_review_mode()
+    end,
+    review_cleanup = function()
+      local cfg = lazy.require("diffview.config").get_config()
+      if not cfg.review or not cfg.review.enabled then
+        utils.info("Review feature is not enabled")
+        return
+      end
+
+      -- Get preview first
+      local preview = review.get_cleanup_preview(view)
+
+      if preview.error then
+        utils.warn("Cleanup preview failed: " .. preview.error)
+        return
+      end
+
+      if #preview.deleted_branches == 0 then
+        utils.info("No stale review data found for this repository")
+        return
+      end
+
+      -- Build confirmation message
+      local branch_list = table.concat(preview.deleted_branches, ", ")
+      if #branch_list > 60 then
+        branch_list = branch_list:sub(1, 57) .. "..."
+      end
+
+      vim.ui.select({ "Yes", "No" }, {
+        prompt = ("Clean up review state for %d stale branch(es)? [%s]"):format(
+          preview.deleted_count,
+          branch_list
+        ),
+      }, function(choice)
+        if choice == "Yes" then
+          local result = review.cleanup_stale_reviews(view)
+          if result.error then
+            utils.warn("Cleanup failed: " .. result.error)
+          else
+            utils.info(("Cleaned up review state for %d branch(es)"):format(result.deleted_count))
+          end
+        end
+      end)
     end,
   }
 end

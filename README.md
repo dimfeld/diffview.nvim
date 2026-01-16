@@ -3,6 +3,9 @@
 Single tabpage interface for easily cycling through diffs for all modified files
 for any git rev.
 
+This is a fork of [sindrets/diffview.nvim](https://github.com/sindrets/diffview.nvim), with extra support for
+reviewing PRs and other diffs.
+
 ![preview](https://user-images.githubusercontent.com/2786478/131269942-e34100dd-cbb9-48fe-af31-6e518ce06e9e.png)
 
 
@@ -77,6 +80,82 @@ Get started by opening file history for:
 - The current file: `:DiffviewFileHistory %`
 
 For more info, see `:h :DiffviewFileHistory`.
+
+## Review Tracking
+
+This fork adds review tracking functionality to help you keep track of which
+files you've reviewed in a diff. This is particularly useful when reviewing
+large PRs or diffs that span multiple sessions.
+
+### How It Works
+
+When you mark a file as reviewed, diffview stores the file's blob hash (the
+content hash) along with a timestamp. This has several advantages:
+
+- **Survives rebases and amends**: Since the blob hash is content-based, your
+  review state persists even if commit hashes change (common when using tools
+  like Jujutsu or when force-pushing).
+- **Detects changes**: If a file is modified after you reviewed it, diffview
+  detects this by comparing blob hashes and marks it as "changed".
+
+### Review Statuses
+
+Files in the file panel show indicators based on their review status:
+
+- **Unreviewed** (blank): File has never been marked as reviewed
+- **Reviewed** (●): File was marked as reviewed and hasn't changed
+- **Changed** (◐): File was marked as reviewed but has been modified since
+
+### Key Features
+
+**Mark files as reviewed:**
+- `<leader>rm` - Mark current file as reviewed
+- `<leader>rM` - Mark all files as reviewed
+
+**Navigate by review status:**
+- `]r` / `[r` - Jump to next/previous file pending review (unreviewed or changed)
+- `]R` / `[R` - Jump to next/previous unreviewed file
+
+**Review filter:**
+- `<leader>rf` - Toggle filter to show only files pending review
+
+**Since-review diff mode:**
+- `<leader>rs` - Toggle since-review mode. When enabled, files marked as
+  "changed" show only the diff since your last review, not the full diff.
+  This helps you focus on what changed since you last looked at a file.
+
+**Clear review state:**
+- `<leader>rc` - Clear review status for current file
+- `<leader>rC` - Clear all review state for this branch
+- `<leader>rX` - Clear all review state for this repository
+
+### Configuration
+
+```lua
+review = {
+  enabled = true,              -- Enable review tracking
+  cache_dir = nil,             -- Storage location (default: ~/.cache/diffview.nvim/reviews/)
+  auto_cleanup = false,        -- Auto-cleanup stale branch data on DiffView open
+  cleanup_age_days = 30,       -- Age threshold for auto-cleanup (days)
+  symbols = {
+    unreviewed = " ",          -- No indicator
+    reviewed = "●",            -- Filled circle (green)
+    changed = "◐",             -- Half-filled circle (yellow)
+  },
+}
+```
+
+### Cleanup
+
+Review state is stored per-branch. Over time, you may accumulate review data
+for branches that no longer exist. Use `:DiffviewReviewCleanup` to remove
+stale data:
+
+- `:DiffviewReviewCleanup` - Interactively clean up stale branch data
+- `:DiffviewReviewCleanup!` - Preview what would be cleaned up (dry run)
+
+You can also enable `auto_cleanup = true` in the config to automatically clean
+up stale data when opening a DiffView.
 
 ## Usage
 
@@ -268,6 +347,17 @@ require("diffview").setup({
     DiffviewOpen = {},
     DiffviewFileHistory = {},
   },
+  review = {          -- See |diffview-config-review|
+    enabled = true,   -- Enable review tracking
+    cache_dir = nil,  -- Review state storage (default: ~/.cache/diffview.nvim/reviews/)
+    auto_cleanup = false,    -- Auto-cleanup stale branch review data on DiffView open
+    cleanup_age_days = 30,   -- Age threshold for cleanup (days)
+    symbols = {       -- Symbols for review state indicator in file panel
+      unreviewed = " ",  -- Blank space (no indicator)
+      reviewed = "●",    -- Filled circle (green)
+      changed = "◐",     -- Half-filled circle (yellow)
+    },
+  },
   hooks = {},         -- See |diffview-config-hooks|
   keymaps = {
     disable_defaults = false, -- Disable the default keymaps
@@ -286,6 +376,17 @@ require("diffview").setup({
       { "n", "g<C-x>",      actions.cycle_layout,                   { desc = "Cycle through available layouts." } },
       { "n", "[x",          actions.prev_conflict,                  { desc = "In the merge-tool: jump to the previous conflict" } },
       { "n", "]x",          actions.next_conflict,                  { desc = "In the merge-tool: jump to the next conflict" } },
+      { "n", "[r",          actions.review_prev_pending,            { desc = "Jump to the previous file pending review" } },
+      { "n", "]r",          actions.review_next_pending,            { desc = "Jump to the next file pending review" } },
+      { "n", "[R",          actions.review_prev_unreviewed,         { desc = "Jump to the previous unreviewed file" } },
+      { "n", "]R",          actions.review_next_unreviewed,         { desc = "Jump to the next unreviewed file" } },
+      { "n", "<leader>rf",  actions.review_toggle_filter,           { desc = "Toggle review filter (show only pending)" } },
+      { "n", "<leader>rs",  actions.review_toggle_since_review,    { desc = "Toggle since-review diff mode" } },
+      { "n", "<leader>rm",  actions.review_mark_file,              { desc = "Mark the current file as reviewed" } },
+      { "n", "<leader>rM",  actions.review_mark_all,               { desc = "Mark all files as reviewed" } },
+      { "n", "<leader>rc",  actions.review_clear_file,             { desc = "Clear review status for the current file" } },
+      { "n", "<leader>rC",  actions.review_clear_all,              { desc = "Clear all review state for this branch" } },
+      { "n", "<leader>rX",  actions.review_clear_repo,             { desc = "Clear all review state for this repository" } },
       { "n", "<leader>co",  actions.conflict_choose("ours"),        { desc = "Choose the OURS version of a conflict" } },
       { "n", "<leader>ct",  actions.conflict_choose("theirs"),      { desc = "Choose the THEIRS version of a conflict" } },
       { "n", "<leader>cb",  actions.conflict_choose("base"),        { desc = "Choose the BASE version of a conflict" } },
@@ -356,6 +457,17 @@ require("diffview").setup({
       { "n", "g<C-x>",         actions.cycle_layout,                   { desc = "Cycle available layouts" } },
       { "n", "[x",             actions.prev_conflict,                  { desc = "Go to the previous conflict" } },
       { "n", "]x",             actions.next_conflict,                  { desc = "Go to the next conflict" } },
+      { "n", "[r",             actions.review_prev_pending,            { desc = "Jump to the previous file pending review" } },
+      { "n", "]r",             actions.review_next_pending,            { desc = "Jump to the next file pending review" } },
+      { "n", "[R",             actions.review_prev_unreviewed,         { desc = "Jump to the previous unreviewed file" } },
+      { "n", "]R",             actions.review_next_unreviewed,         { desc = "Jump to the next unreviewed file" } },
+      { "n", "<leader>rf",     actions.review_toggle_filter,           { desc = "Toggle review filter (show only pending)" } },
+      { "n", "<leader>rs",    actions.review_toggle_since_review,    { desc = "Toggle since-review diff mode" } },
+      { "n", "<leader>rm",    actions.review_mark_file,              { desc = "Mark the current file as reviewed" } },
+      { "n", "<leader>rM",    actions.review_mark_all,               { desc = "Mark all files as reviewed" } },
+      { "n", "<leader>rc",    actions.review_clear_file,             { desc = "Clear review status for the current file" } },
+      { "n", "<leader>rC",  actions.review_clear_all,              { desc = "Clear all review state for this branch" } },
+      { "n", "<leader>rX",  actions.review_clear_repo,             { desc = "Clear all review state for this repository" } },
       { "n", "g?",             actions.help("file_panel"),             { desc = "Open the help panel" } },
       { "n", "<leader>cO",     actions.conflict_choose_all("ours"),    { desc = "Choose the OURS version of a conflict for the whole file" } },
       { "n", "<leader>cT",     actions.conflict_choose_all("theirs"),  { desc = "Choose the THEIRS version of a conflict for the whole file" } },

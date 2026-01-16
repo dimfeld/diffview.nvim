@@ -383,6 +383,25 @@ COMMANDS                                        *diffview-commands*
                                                 *:DiffviewLog*
 :DiffviewLog            Open the debug log.
 
+                                                *:DiffviewReviewCleanup*
+:DiffviewReviewCleanup  Clean up stale review data for the current repository.
+                        Stale data includes review state for branches that no
+                        longer exist in git (local or remote-tracking).
+
+                        Shows a preview of branches to be cleaned up and
+                        prompts for confirmation before deletion. Only review
+                        data older than the configured age threshold
+                        (|diffview-config-review|, `cleanup_age_days`) will be
+                        removed.
+
+                        Works both with and without an active DiffView - when
+                        run outside of a DiffView, it uses the current working
+                        directory to determine the repository.
+
+:DiffviewReviewCleanup! Dry-run mode: shows what would be cleaned up without
+                        actually deleting anything. Use this to preview the
+                        cleanup before committing to it.
+
 ==============================================================================
 
 CONFIGURATION                                   *diffview-config*
@@ -680,6 +699,86 @@ default_args                                    *diffview-config-default_args*
                   DiffviewFileHistory = { "--base=LOCAL" },
                 }
 <
+
+review                                          *diffview-config-review*
+        Type: `table`, Default: (see defaults)
+
+        Configuration for review tracking. Review tracking allows you to
+        mark files as reviewed while working through a diff. A review state
+        indicator appears in the file panel showing whether each file is
+        unreviewed, reviewed, or has changed since it was last reviewed.
+
+        Fields: ~
+            {enabled} (boolean)
+                Enable or disable review tracking. When disabled, no review
+                indicator is shown in the file panel and review actions are
+                not available.
+                Default: `true`
+
+            {cache_dir} (string|nil)
+                Directory where review state is persisted. If nil, defaults
+                to `~/.cache/diffview.nvim/reviews/`.
+                Default: `nil`
+
+            {auto_cleanup} (boolean)
+                Enable automatic cleanup of stale branch review data when
+                opening a DiffView. Stale branches are those that no longer
+                exist in git (local or remote). Cleanup is performed silently
+                in the background unless errors occur.
+                Default: `false`
+
+            {cleanup_age_days} (integer)
+                Age threshold in days for cleanup. Only review data older
+                than this many days will be removed during cleanup. This
+                applies to both stale branch files (branches that no longer
+                exist in git) and detached HEAD files. Branches that still
+                exist are never deleted based on age.
+                Default: `30`
+
+            {symbols} (table)
+                Symbols used for the review state indicator in the file
+                panel. Each symbol should be a single character.
+
+                • {unreviewed} (string) - Symbol for unreviewed files.
+                  Default: `" "` (blank space)
+                • {reviewed} (string) - Symbol for files that have been
+                  reviewed and haven't changed since.
+                  Default: `"●"` (filled circle)
+                • {changed} (string) - Symbol for files that were reviewed
+                  but have changed since the last review.
+                  Default: `"◐"` (half-filled circle)
+
+        The review state indicator uses the following highlight groups:
+          • `DiffviewReviewUnreviewed` - For unreviewed files
+          • `DiffviewReviewReviewed` - For reviewed files (links to diffAdded)
+          • `DiffviewReviewChanged` - For changed files (links to DiagnosticSignWarn)
+
+        Example: >lua
+                review = {
+                  enabled = true,
+                  cache_dir = vim.fn.stdpath("cache") .. "/my-reviews/",
+                  auto_cleanup = true,     -- Clean up stale branches on open
+                  cleanup_age_days = 14,   -- Only clean data older than 14 days
+                  symbols = {
+                    unreviewed = " ",
+                    reviewed = "✓",
+                    changed = "!",
+                  },
+                }
+<
+        Default Review Keymaps: ~
+            Keymaps for review actions are available in both the diff view
+            and file panel contexts.
+
+            `]r` / `[r`      Jump to next/previous file pending review
+            `]R` / `[R`      Jump to next/previous unreviewed file
+            `<leader>rf`     Toggle review filter (show only pending)
+            `<leader>rs`     Toggle since-review diff mode
+            `<leader>rm`     Mark current file as reviewed
+            `<leader>rM`     Mark all files as reviewed
+            `<leader>rc`     Clear review status for current file
+            `<leader>rC`     Clear all review state for branch (with confirm)
+            `<leader>rX`     Clear all review state for repo (with confirm)
 
 hooks                                           *diffview-config-hooks*
         Type: `table<string, function>`, Default: `{}`
@@ -1143,6 +1242,167 @@ restore_entry                                   *diffview-actions-restore_entry*
         NOTE: A command is echoed that shows how to undo the change. Check
         |:messages| or |:DiffviewLog| to see it again.
 
+review_clear_file                               *diffview-actions-review_clear_file*
+        Contexts: `diff_view`, `file_panel`
+
+        Clear the review state for the current file. The file will appear as
+        unreviewed again. Only available when review tracking is enabled.
+
+review_clear_all                                *diffview-actions-review_clear_all*
+        Contexts: `view`, `file_panel`
+
+        Clear all review state for the current branch. Shows a confirmation
+        dialog before clearing with the count of reviewed files and branch
+        name. After clearing, all files will appear as "unreviewed".
+
+        If no files are currently marked as reviewed, an info message is
+        shown instead.
+
+        This is useful when:
+        - Starting over on a review after significant changes
+        - The previous review is no longer relevant
+        - Review state has become stale (blob hashes point to
+          garbage-collected objects)
+
+        Only available when review tracking is enabled.
+
+review_clear_repo                               *diffview-actions-review_clear_repo*
+        Contexts: `view`, `file_panel`
+
+        Clear all review state for the entire repository (all branches).
+        Shows a confirmation dialog before clearing with the count of
+        branches that have review state.
+
+        This deletes all review state files for the repository from the
+        cache directory. The in-memory state for the current branch is also
+        cleared.
+
+        This is useful when:
+        - A repository has been relocated or removed
+        - You want to clear all historical review data
+        - Starting fresh across all branches
+
+        Only available when review tracking is enabled.
+
+review_mark_all                                 *diffview-actions-review_mark_all*
+        Contexts: `diff_view`, `file_panel`
+
+        Mark all files in the current diff view as reviewed. This stores the
+        current blob hash for each file, so if a file changes after being
+        marked, it will show as "changed" rather than "reviewed". Only
+        available when review tracking is enabled.
+
+review_mark_file                                *diffview-actions-review_mark_file*
+        Contexts: `diff_view`, `file_panel`
+
+        Mark the current file as reviewed. This stores the file's current blob
+        hash, so if the file changes after being marked, it will show as
+        "changed" rather than "reviewed". Only available when review tracking
+        is enabled.
+
+[count] review_next_pending                     *diffview-actions-review_next_pending*
+        Contexts: `diff_view`, `file_panel`
+
+        Jump to the next file pending review. A file is "pending review" if
+        its review status is either "unreviewed" (never marked as reviewed) or
+        "changed" (was reviewed but has changed since). This allows quickly
+        navigating to files that need attention during code review.
+
+        Wraps around at the end of the file list. Supports Vim count prefix.
+
+        Return: ~
+            Shows position feedback like "Pending review [2/5]" when a match
+            is found. Shows an info message if no files need review.
+
+[count] review_prev_pending                     *diffview-actions-review_prev_pending*
+        Contexts: `diff_view`, `file_panel`
+
+        Jump to the previous file pending review. See
+        |diffview-actions-review_next_pending| for details.
+
+[count] review_next_unreviewed                  *diffview-actions-review_next_unreviewed*
+        Contexts: `diff_view`, `file_panel`
+
+        Jump to the next unreviewed file. Unlike
+        |diffview-actions-review_next_pending|, this only navigates to files
+        that have never been marked as reviewed - it skips files that were
+        reviewed but have since changed.
+
+        Wraps around at the end of the file list. Supports Vim count prefix.
+
+        Return: ~
+            Shows position feedback like "Unreviewed [1/3]" when a match is
+            found. Shows an info message if all files have been reviewed.
+
+[count] review_prev_unreviewed                  *diffview-actions-review_prev_unreviewed*
+        Contexts: `diff_view`, `file_panel`
+
+        Jump to the previous unreviewed file. See
+        |diffview-actions-review_next_unreviewed| for details.
+
+review_toggle_filter                            *diffview-actions-review_toggle_filter*
+        Contexts: `diff_view`, `file_panel`
+
+        Toggle the file panel filter to show only files pending review. When
+        enabled, the file panel shows only files with status "unreviewed" or
+        "changed", hiding files that have been reviewed and haven't changed.
+
+        This is useful when re-reviewing a PR after updates - you can quickly
+        filter to see only the files that need attention.
+
+        When the filter is toggled, an info message shows the current state
+        and the number of pending files (e.g., "Review filter ON: 3 files
+        pending").
+
+        The filter works with both list and tree listing styles. In tree
+        view, empty directories (those with no visible children after
+        filtering) are automatically hidden.
+
+        Only available when review tracking is enabled.
+
+review_toggle_since_review                      *diffview-actions-review_toggle_since_review*
+        Contexts: `diff_view`, `file_panel`
+
+        Toggle the since-review diff mode. When enabled, files with "changed"
+        status (previously reviewed but modified since) will show only the
+        changes since the commit where they were last marked as reviewed,
+        rather than the full diff from the base.
+
+        This is useful when re-reviewing a PR after updates - instead of
+        seeing the full file diff, you see only what changed since your last
+        review.
+
+        When a file is opened in since-review mode, an indicator message shows
+        the commit hash that serves as the left side of the diff (e.g.,
+        "[Since review: abc1234]").
+
+        The mode falls back to full diff gracefully when:
+        - The file has not been reviewed yet
+        - The review was saved without commit information (legacy state)
+        - The reviewed commit no longer exists (e.g., after a force-push)
+
+        Only available when review tracking is enabled.
+
+review_cleanup                                  *diffview-actions-review_cleanup*
+        Contexts: `diff_view`, `file_panel`
+
+        Clean up stale review data for the current repository. Stale data
+        includes review state for branches that no longer exist in git
+        (either as local branches or remote-tracking branches).
+
+        When triggered, shows a preview of which branches would be cleaned
+        up and prompts for confirmation before deletion. Only review data
+        older than the configured age threshold (`cleanup_age_days`) will
+        be removed.
+
+        This is useful for removing accumulated review data for branches
+        that have been merged and deleted.
+
+        See also |:DiffviewReviewCleanup| for the command-line equivalent
+        which can be used outside of a DiffView.
+
+        Only available when review tracking is enabled.
+
 scroll_view({distance})                         *diffview-actions-scroll_view*
         Contexts: `panel`
 
@@ -1256,6 +1516,9 @@ actions:
         • |diffview-actions-focus_entry|
         • |diffview-actions-goto_file_edit|
         • |diffview-actions-jumpto_conflict|
+        • |diffview-actions-review_clear_file|
+        • |diffview-actions-review_mark_all|
+        • |diffview-actions-review_mark_file|
         • |diffview-actions-view_windo|
 
 ==============================================================================
@@ -1295,6 +1558,13 @@ For information on how to use User autocommands, see |User|.
                       buffer and the correct diff window as the current window
                       such that |:setlocal| will apply settings to the
                       relevant buffer / window.
+
+`DiffviewReviewCleanupCompleted`
+                      Fires after stale review data has been cleaned up. Only
+                      fires when at least one stale branch's review data was
+                      deleted. This event fires both for automatic cleanup
+                      (when `review.auto_cleanup` is enabled) and manual
+                      cleanup via `:DiffviewReviewCleanup`.
 
 ==============================================================================
 
@@ -1360,6 +1630,18 @@ gf                      Open the local version of the file in a different
                                                 *diffview-maps-focus_files*
 <leader>e               Bring focus to the file panel.
 
+                                                *diffview-maps-review_toggle_filter*
+<leader>rf              Toggle the review filter. When enabled, only files
+                        pending review (unreviewed or changed) are shown in
+                        the file panel.
+
+                                                *diffview-maps-review_toggle_since_review*
+<leader>rs              Toggle since-review diff mode. When enabled, files with
+                        "changed" status show only changes since they were
+                        last marked reviewed. See
+                        |diffview-actions-review_toggle_since_review| for
+                        details about fallback behavior.
+
                                                 *diffview-maps-copy_hash*
 y                       Copy the commit hash of the entry under the cursor.
 
@@ -1410,6 +1692,10 @@ R                       Update the stats and entries in the file list.
 <leader>b               Toggle the file panel.
 
 <leader>e               Bring focus to the file panel.
+
+<leader>rf              Toggle the review filter (show only pending files).
+
+<leader>rs              Toggle since-review diff mode.
 
                                                 *diffview-maps-file-history-panel*
 File history panel maps ~

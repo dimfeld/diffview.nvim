@@ -1308,6 +1308,143 @@ function GitAdapter:head_rev()
   return GitRev(RevType.COMMIT, s, true)
 end
 
+---Get the current branch name, or a detached HEAD identifier if not on a branch.
+---For JJ repositories (detected by .jj directory), uses JJ to find the current bookmark.
+---@return string branch The branch name, or "detached-<short-sha>" if in detached HEAD state
+function GitAdapter:get_current_branch()
+  -- Check if this is a JJ repository by looking for .jj directory
+  local jj_dir = pl:join(self.ctx.toplevel, ".jj")
+  if pl:is_dir(jj_dir) then
+    -- Use JJ to get the current bookmark
+    local jj_out, jj_code = utils.job({
+      "jj",
+      "log",
+      "-r", "latest(heads(ancestors(@) & bookmarks()), 1)",
+      "--limit", "1",
+      "--no-graph",
+      "--ignore-working-copy",
+      "-T", "local_bookmarks",
+    }, { cwd = self.ctx.toplevel, silent = true })
+
+    if jj_code == 0 and jj_out and #jj_out > 0 then
+      -- Remove asterisks and trim whitespace
+      local branch = vim.trim(jj_out[1]):gsub("%*", "")
+      if branch ~= "" then
+        return branch
+      end
+    end
+    -- Fall through to Git behavior if JJ command fails or returns empty
+  end
+
+  local out, code = self:exec_sync({
+    "rev-parse",
+    "--abbrev-ref",
+    "HEAD",
+  }, {
+    cwd = self.ctx.toplevel,
+    retry = 2,
+    fail_on_empty = true,
+  })
+
+  if code ~= 0 then
+    -- Fall back to commit SHA if rev-parse fails
+    out, code = self:exec_sync({
+      "rev-parse",
+      "--short",
+      "HEAD",
+    }, {
+      cwd = self.ctx.toplevel,
+      retry = 2,
+      fail_on_empty = true,
+    })
+
+    if code ~= 0 or not out or #out == 0 then
+      return "unknown"
+    end
+
+    return "detached-" .. vim.trim(out[1])
+  end
+
+  local branch = vim.trim(out[1])
+
+  -- "HEAD" is returned when in detached HEAD state
+  if branch == "HEAD" then
+    -- Get the short commit SHA instead
+    out, code = self:exec_sync({
+      "rev-parse",
+      "--short",
+      "HEAD",
+    }, {
+      cwd = self.ctx.toplevel,
+      retry = 2,
+      fail_on_empty = true,
+    })
+
+    if code ~= 0 or not out or #out == 0 then
+      return "detached-unknown"
+    end
+
+    return "detached-" .. vim.trim(out[1])
+  end
+
+  return branch
+end
+
+---Get list of all branch names (local and remote-tracking)
+---Used for cleanup of stale review state
+---@return string[]|nil branches List of branch names, or nil on error
+function GitAdapter:get_all_branches()
+  local branches = {}
+  local seen = {}
+
+  -- Get local branches first (refs/heads/)
+  -- Don't extract short forms from local branches (e.g., feature/foo should not add "foo")
+  local local_out, local_code = self:exec_sync({
+    "for-each-ref",
+    "--format=%(refname:short)",
+    "refs/heads/",
+  }, { cwd = self.ctx.toplevel, silent = true })
+
+  if local_code ~= 0 then
+    return nil
+  end
+
+  for _, line in ipairs(local_out or {}) do
+    if line ~= "" and not seen[line] then
+      seen[line] = true
+      table.insert(branches, line)
+    end
+  end
+
+  -- Get remote-tracking branches (refs/remotes/)
+  -- For remote branches, also add the short form (e.g., "origin/main" -> also add "main")
+  local remote_out, remote_code = self:exec_sync({
+    "for-each-ref",
+    "--format=%(refname:short)",
+    "refs/remotes/",
+  }, { cwd = self.ctx.toplevel, silent = true })
+
+  if remote_code ~= 0 then
+    return nil
+  end
+
+  for _, line in ipairs(remote_out or {}) do
+    if line ~= "" and not seen[line] then
+      seen[line] = true
+      table.insert(branches, line)
+
+      -- For remote branches like "origin/main", also add the short form "main"
+      local short = line:match("^[^/]+/(.+)$")
+      if short and not seen[short] then
+        seen[short] = true
+        table.insert(branches, short)
+      end
+    end
+  end
+
+  return branches
+end
+
 ---@param path string
 ---@param rev_arg string?
 ---@return string?
@@ -1907,6 +2044,12 @@ end
 ---@return boolean -- True if the file was binary for the given rev, or it didn't exist.
 function GitAdapter:is_binary(path, rev)
   if rev.type == RevType.STAGE and rev.stage > 0 then
+    return false
+  end
+
+  -- CUSTOM type is used when caller provides get_data function (e.g., since-review mode)
+  -- The caller is responsible for the data, so we can't check if it's binary
+  if rev.type == RevType.CUSTOM then
     return false
   end
 

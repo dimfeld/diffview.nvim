@@ -403,6 +403,16 @@ function M.get_git_hl(status)
   return git_status_hl_map[status]
 end
 
+local review_status_hl_map = {
+  ["unreviewed"] = "DiffviewReviewUnreviewed",
+  ["reviewed"] = "DiffviewReviewReviewed",
+  ["changed"] = "DiffviewReviewChanged",
+}
+
+function M.get_review_hl(status)
+  return review_status_hl_map[status]
+end
+
 function M.get_colors()
   return {
     white = M.get_fg("Normal") or "White",
@@ -462,6 +472,9 @@ M.hl_links = {
   StatusDeleted = "diffRemoved",
   StatusBroken = "diffRemoved",
   StatusIgnored = "Comment",
+  ReviewUnreviewed = "Comment",
+  ReviewReviewed = "diffAdded",
+  ReviewChanged = "DiagnosticSignWarn",
   DiffAdd = "DiffAdd",
   DiffDelete = "DiffDelete",
   DiffChange = "DiffChange",

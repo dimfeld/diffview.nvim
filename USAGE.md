@@ -81,6 +81,155 @@ from the PR branch.
 
 ![file history cherry pick demo](https://user-images.githubusercontent.com/2786478/229853402-f45280ee-f6e2-4325-8a39-ce25b9c5221e.png)
 
+### Navigating Between Files Pending Review
+
+When reviewing a PR with many files, you can use the review navigation commands
+to quickly jump between files that need attention:
+
+- `]r` / `[r` - Jump to next/previous file pending review (unreviewed or changed)
+- `]R` / `[R` - Jump to next/previous unreviewed file only
+
+These commands work from both the file panel and diff view windows. They support
+Vim count prefixes (e.g., `2]r` skips two files) and wrap around at list boundaries.
+
+The "pending review" navigation (`]r`/`[r`) finds files that are either:
+- **Unreviewed**: Never marked as reviewed
+- **Changed**: Previously reviewed but modified since
+
+The "unreviewed only" navigation (`]R`/`[R`) is more restrictive - it only finds
+files that have never been marked as reviewed, skipping files that were reviewed
+but have since changed.
+
+Position feedback is shown when navigating, such as "Pending review [2/5]" or
+"Unreviewed [1/3]".
+
+### Filtering the File Panel
+
+When re-reviewing a PR after updates, you often only care about files that need
+attention. You can filter the file panel to show only pending files:
+
+- `<leader>rf` - Toggle the review filter
+
+When the filter is enabled:
+- Only files with "unreviewed" or "changed" status are shown
+- Reviewed files that haven't changed are hidden
+- In tree view, empty directories are automatically hidden
+- An info message shows the filter state and pending file count
+
+This is particularly useful for large PRs where you've already reviewed most
+files and want to focus on what's new or changed.
+
+The filter works alongside the navigation commands - when filtering is on,
+navigation will only move between the visible (pending) files.
+
+### Viewing Only Changes Since Last Review
+
+When re-reviewing a PR after updates, you may want to see only what changed since
+your last review rather than the full diff. The since-review diff mode provides
+this capability:
+
+- `<leader>rs` - Toggle since-review diff mode
+
+When since-review mode is enabled and you open a file that was previously reviewed
+but has since changed (shown with the "changed" status indicator), the diff will
+show:
+- **Left side**: The file as it was when you marked it reviewed
+- **Right side**: The current state of the file
+
+This lets you focus on just the new changes without re-reading the entire diff.
+
+When opening a file in since-review mode, an indicator message shows the commit
+hash being used as the reference point (e.g., `[Since review: abc1234]`).
+
+**Fallback behavior**: The since-review mode gracefully falls back to the full
+diff when:
+- The file has not been reviewed yet (no reference point exists)
+- The review was saved before commit tracking was added (legacy state)
+- The reviewed commit no longer exists (e.g., after a force-push that rewrote
+  history)
+
+In these cases, you'll see an informational message explaining why the full diff
+is being shown instead.
+
+**Tip**: Combine the review filter (`<leader>rf`) with since-review mode
+(`<leader>rs`) for an efficient re-review workflow. The filter shows only files
+needing attention, and since-review mode shows only the new changes in those files.
+
+### Marking Files as Reviewed
+
+As you work through a PR, you can mark files as reviewed to track your progress:
+
+- `<leader>rm` - Mark the current file as reviewed
+- `<leader>rM` - Mark all files as reviewed
+- `<leader>rc` - Clear the review status for the current file
+
+When you mark a file as reviewed, the plugin records the file's current blob hash.
+If the file changes later (e.g., after the author pushes updates), it will show
+as "changed" (half-filled circle) instead of "reviewed" (filled circle), indicating
+you need to re-review it.
+
+The review state persists across Neovim sessions, stored in
+`~/.cache/diffview.nvim/reviews/` by default.
+
+### Clearing Review State
+
+If you need to start over on a review, you can clear review state:
+
+- `<leader>rC` - Clear all review state for this branch (with confirmation)
+- `<leader>rX` - Clear all review state for this repository (with confirmation)
+
+Both commands show a confirmation dialog before clearing. The branch-level clear
+(`<leader>rC`) shows the count of reviewed files and branch name, while the
+repository-level clear (`<leader>rX`) shows the count of branches with review state.
+
+Clearing branch state is useful when:
+- The previous review is no longer relevant
+- You want to start fresh after significant changes to the branch
+- Review state has become stale (e.g., blob hashes point to garbage-collected objects)
+
+Clearing repository state is useful when:
+- A repository has been relocated or removed
+- You want to clear all historical review data across all branches
+
+### Cleaning Up Stale Review Data
+
+Over time, as you review PRs and branches get merged and deleted, the review
+data for those branches becomes stale. The cleanup functionality helps manage
+this accumulated data.
+
+**Manual cleanup:**
+
+```vim
+" Preview what would be cleaned up (dry-run)
+:DiffviewReviewCleanup!
+
+" Clean up with confirmation prompt
+:DiffviewReviewCleanup
+```
+
+The cleanup command compares your stored review data against existing git branches
+(both local and remote-tracking). Review data for branches that no longer exist
+will be removed, but only if it's older than the configured age threshold
+(default: 30 days).
+
+You can also trigger cleanup from within a DiffView using the `review_cleanup`
+action (not mapped by default), which shows a preview and prompts for confirmation.
+
+**Automatic cleanup:**
+
+If you prefer automatic cleanup, you can enable it in your config:
+
+```lua
+review = {
+  auto_cleanup = true,     -- Clean up on DiffView open
+  cleanup_age_days = 14,   -- Only clean data older than 14 days
+}
+```
+
+When enabled, stale review data is cleaned up silently in the background each
+time you open a DiffView. An info message is shown only when files are actually
+removed.
+
 ## Inspecting Diffs for Stashes
 
 The latest Git stash is always stored in the reference `refs/stash`. We can
