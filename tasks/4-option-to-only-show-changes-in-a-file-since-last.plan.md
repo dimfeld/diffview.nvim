@@ -16,7 +16,7 @@ references:
 planGeneratedAt: 2026-01-16T02:05:48.392Z
 promptsGeneratedAt: 2026-01-16T02:05:48.392Z
 createdAt: 2026-01-15T00:26:26.637Z
-updatedAt: 2026-01-16T02:18:12.516Z
+updatedAt: 2026-01-16T02:29:02.114Z
 tasks:
   - title: Extend ReviewEntry to store commit hash
     done: true
@@ -29,17 +29,17 @@ tasks:
       hash using adapter:head_rev() and pass it to set_file_reviewed. Also
       update mark_all_reviewed.
   - title: Add review_filter_enabled state to DiffView
-    done: false
+    done: true
     description: Add review_filter_enabled boolean field to DiffView class in
       diff_view.lua. Initialize to false in DiffView:init(). Add
       toggle_review_filter method that toggles state and refreshes panel.
   - title: Add review_toggle_filter action and keybinding
-    done: false
+    done: true
     description: Add review_toggle_filter to action_names in actions.lua. Add
       listener in listeners.lua that calls view:toggle_review_filter(). Add
       <leader>rf keybinding to both view and file_panel sections in config.lua.
   - title: Implement file panel filtering in FilePanel
-    done: false
+    done: true
     description: Modify ordered_file_list() in file_panel.lua to filter files by
       review status when view.review_filter_enabled is true. Only include files
       with status unreviewed or changed. Also filter in update_components() to
@@ -125,8 +125,10 @@ changedFiles:
   - lua/diffview/tests/functional/render_review_indicator_spec.lua
   - lua/diffview/tests/functional/review_actions_spec.lua
   - lua/diffview/tests/functional/review_api_spec.lua
+  - lua/diffview/tests/functional/review_filter_spec.lua
   - lua/diffview/tests/functional/review_navigation_spec.lua
   - lua/diffview/tests/functional/review_store_spec.lua
+  - lua/diffview/ui/models/file_tree/file_tree.lua
   - lua/diffview/vcs/adapters/git/init.lua
 tags: []
 ---
@@ -842,30 +844,38 @@ Add section explaining:
 
 ## Current Progress
 ### Current State
-- Data model extended to store commit_hash when marking files reviewed
-- Foundation in place for since-review diff mode (Tasks 1-2 complete)
+- File panel filtering core functionality implemented (Tasks 1-5 complete)
+- Filter toggle works in both list and tree view modes
+- Empty directories are hidden when all children are filtered out
 
 ### Completed (So Far)
 - Task 1: Added `commit_hash` optional field to ReviewEntry in review_store.lua
 - Task 2: Updated mark_file_reviewed and mark_all_reviewed in review.lua to capture HEAD commit hash via adapter:head_rev()
+- Task 3: Added `review_filter_enabled` state to DiffView with `toggle_review_filter()` method
+- Task 4: Added `review_toggle_filter` action and `<leader>rf` keybinding in both view and file_panel sections
+- Task 5: Implemented file panel filtering in `ordered_file_list()` and `update_components()`, including tree view filtering via `file_filter` parameter to `create_comp_schema()`
 - Event payloads (review_file_marked) now include commit_hash
-- Added 9 new tests covering commit_hash storage, backward compatibility, and edge cases
+- Added 17 new tests for filtering in review_filter_spec.lua (237 total tests pass)
 
 ### Remaining
-- Tasks 3-8: File panel filtering by review status
+- Tasks 6-8: Remaining file panel filtering polish (hide empty dirs already done in Task 5, need render state indicator and edge cases)
 - Tasks 9-13: Since-review diff mode implementation
 - Tasks 14-16: Additional tests and documentation
 
 ### Next Iteration Guidance
-- Tasks 3-8 form the file panel filtering feature set (recommended next batch)
-- Tasks 3-4 add the filter state and action/keybinding
-- Tasks 5-7 implement the actual filtering logic and UI
-- Task 8 handles edge cases
+- Task 6 (hide empty directories) was completed as part of Task 5 implementation
+- Task 7 adds visual filter indicator in panel header (e.g., [Pending: 5/12])
+- Task 8 handles edge cases (auto-disable filter when all reviewed, show message for empty list)
+- Tasks 9-13 implement the since-review diff mode
 
 ### Decisions / Changes
 - commit_hash is optional in ReviewEntry for backward compatibility with existing saved state
 - head_rev() returns a GitRev object; we extract .commit field for the hash
 - nil commit_hash is handled gracefully throughout
+- FileTree.create_comp_schema accepts optional file_filter function for tree filtering
+- has_visible_files() helper added to FileTree for checking if directory has visible children
+- toggle_review_filter() shows info message with filter state and file counts
+- Cursor automatically moves to first visible file when current file is filtered out
 
 ### Risks / Blockers
 - None
