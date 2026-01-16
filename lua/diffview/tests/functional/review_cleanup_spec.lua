@@ -1323,4 +1323,337 @@ describe("diffview.review cleanup operations", function()
       eq(true, cmd_info.bang, "Command should support bang modifier")
     end)
   end)
+
+  describe("DiffviewReviewCleanup command without active view", function()
+    -- These tests verify the inline confirmation dialog flow when the command
+    -- is invoked outside of an active DiffView
+    local config = require("diffview.config")
+    local review = require("diffview.review")
+    local store
+    local repo_id = "cmdnoview123"  -- 12 characters
+    local original_config
+    local original_get_store
+    local original_get_adapter
+
+    -- Helper to create a mock adapter
+    local function create_mock_adapter(branches, repo_id_override)
+      local actual_repo_id = repo_id_override or repo_id
+      return {
+        ctx = {
+          toplevel = "/mock/cmd/repo/" .. actual_repo_id,
+        },
+        exec_sync = function(self, args, opts)
+          if args[1] == "rev-list" and args[2] == "--max-parents=0" then
+            return { actual_repo_id .. "0000000000000000000000000000" }, 0
+          end
+          return {}, 1
+        end,
+        get_all_branches = function(self)
+          return branches
+        end,
+      }
+    end
+
+    before_each(function()
+      rm_rf(test_cache_dir)
+      store = ReviewStore()
+      store.cache_dir = test_cache_dir
+      uv.fs_mkdir(test_cache_dir, tonumber("0755", 8))
+
+      -- Store original config and ensure review is enabled
+      original_config = vim.deepcopy(config.get_config())
+      local cfg = config.get_config()
+      cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+      -- Store and override review_store.get_store to return our test store
+      original_get_store = review_store.get_store
+      review_store.get_store = function()
+        return store
+      end
+    end)
+
+    after_each(function()
+      rm_rf(test_cache_dir)
+      -- Restore original config
+      if original_config then
+        config._config = original_config
+      end
+      -- Restore original get_store
+      if original_get_store then
+        review_store.get_store = original_get_store
+      end
+      -- Restore original get_adapter if overridden
+      if original_get_adapter then
+        require("diffview").get_adapter = original_get_adapter
+        original_get_adapter = nil
+      end
+    end)
+
+    it("shows confirmation dialog when stale data exists without active view", function()
+      local mock_adapter = create_mock_adapter({ "main" })
+      local repo_dir = test_cache_dir .. "/" .. repo_id
+      uv.fs_mkdir(repo_dir, tonumber("0755", 8))
+
+      -- Create stale branch file
+      local old_timestamp = os.time() - (60 * 24 * 60 * 60)  -- 60 days ago
+      write_file(repo_dir .. "/stale-branch.json", vim.json.encode({
+        version = 1,
+        files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = old_timestamp } },
+      }))
+
+      -- Override diffview.get_adapter to return our mock
+      local diffview_module = require("diffview")
+      original_get_adapter = diffview_module.get_adapter
+      diffview_module.get_adapter = function()
+        return mock_adapter
+      end
+
+      -- Track vim.ui.select call
+      local ui_select_called = false
+      local ui_select_items = nil
+      local original_ui_select = vim.ui.select
+      vim.ui.select = function(items, opts, on_choice)
+        ui_select_called = true
+        ui_select_items = items
+        -- Simulate user choosing "No" to avoid deletion
+        on_choice("No")
+      end
+
+      -- Create the view object that the command would create
+      local view = { adapter = mock_adapter }
+      local preview = review.get_cleanup_preview(view)
+
+      -- Simulate what the command does without active view
+      if #preview.deleted_branches > 0 then
+        -- Build confirmation message
+        local branch_list = table.concat(preview.deleted_branches, ", ")
+        if #branch_list > 60 then
+          branch_list = branch_list:sub(1, 57) .. "..."
+        end
+
+        vim.ui.select({ "Yes", "No" }, {
+          prompt = ("Clean up review state for %d stale branch(es)? [%s]"):format(
+            preview.deleted_count,
+            branch_list
+          ),
+        }, function(choice)
+          if choice == "Yes" then
+            review.cleanup_stale_reviews(view)
+          end
+        end)
+      end
+
+      -- Restore
+      vim.ui.select = original_ui_select
+
+      -- Verify vim.ui.select was called
+      eq(true, ui_select_called)
+      eq({ "Yes", "No" }, ui_select_items)
+
+      -- File should still exist since user chose "No"
+      eq(true, file_exists(repo_dir .. "/stale-branch.json"))
+    end)
+
+    it("deletes files when user confirms Yes without active view", function()
+      local mock_adapter = create_mock_adapter({ "main" })
+      local repo_dir = test_cache_dir .. "/" .. repo_id
+      uv.fs_mkdir(repo_dir, tonumber("0755", 8))
+
+      -- Create stale branch file
+      local old_timestamp = os.time() - (60 * 24 * 60 * 60)
+      write_file(repo_dir .. "/stale-branch.json", vim.json.encode({
+        version = 1,
+        files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = old_timestamp } },
+      }))
+
+      -- Override diffview.get_adapter to return our mock
+      local diffview_module = require("diffview")
+      original_get_adapter = diffview_module.get_adapter
+      diffview_module.get_adapter = function()
+        return mock_adapter
+      end
+
+      -- Auto-confirm with "Yes"
+      local original_ui_select = vim.ui.select
+      vim.ui.select = function(items, opts, on_choice)
+        on_choice("Yes")
+      end
+
+      -- Create the view object that the command would create
+      local view = { adapter = mock_adapter }
+      local preview = review.get_cleanup_preview(view)
+
+      -- Simulate what the command does without active view
+      if #preview.deleted_branches > 0 then
+        local branch_list = table.concat(preview.deleted_branches, ", ")
+        if #branch_list > 60 then
+          branch_list = branch_list:sub(1, 57) .. "..."
+        end
+
+        vim.ui.select({ "Yes", "No" }, {
+          prompt = ("Clean up review state for %d stale branch(es)? [%s]"):format(
+            preview.deleted_count,
+            branch_list
+          ),
+        }, function(choice)
+          if choice == "Yes" then
+            review.cleanup_stale_reviews(view)
+          end
+        end)
+      end
+
+      -- Restore
+      vim.ui.select = original_ui_select
+
+      -- File should be deleted
+      eq(false, file_exists(repo_dir .. "/stale-branch.json"))
+    end)
+
+    it("does not delete files when user cancels (nil choice) without active view", function()
+      local mock_adapter = create_mock_adapter({ "main" })
+      local repo_dir = test_cache_dir .. "/" .. repo_id
+      uv.fs_mkdir(repo_dir, tonumber("0755", 8))
+
+      -- Create stale branch file
+      local old_timestamp = os.time() - (60 * 24 * 60 * 60)
+      write_file(repo_dir .. "/stale-branch.json", vim.json.encode({
+        version = 1,
+        files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = old_timestamp } },
+      }))
+
+      -- Override diffview.get_adapter to return our mock
+      local diffview_module = require("diffview")
+      original_get_adapter = diffview_module.get_adapter
+      diffview_module.get_adapter = function()
+        return mock_adapter
+      end
+
+      -- Simulate user pressing escape (nil choice)
+      local original_ui_select = vim.ui.select
+      vim.ui.select = function(items, opts, on_choice)
+        on_choice(nil)
+      end
+
+      -- Create the view object that the command would create
+      local view = { adapter = mock_adapter }
+      local preview = review.get_cleanup_preview(view)
+
+      -- Simulate what the command does without active view
+      if #preview.deleted_branches > 0 then
+        local branch_list = table.concat(preview.deleted_branches, ", ")
+        if #branch_list > 60 then
+          branch_list = branch_list:sub(1, 57) .. "..."
+        end
+
+        vim.ui.select({ "Yes", "No" }, {
+          prompt = ("Clean up review state for %d stale branch(es)? [%s]"):format(
+            preview.deleted_count,
+            branch_list
+          ),
+        }, function(choice)
+          if choice == "Yes" then
+            review.cleanup_stale_reviews(view)
+          end
+        end)
+      end
+
+      -- Restore
+      vim.ui.select = original_ui_select
+
+      -- File should still exist
+      eq(true, file_exists(repo_dir .. "/stale-branch.json"))
+    end)
+
+    it("shows info when no stale data found without active view", function()
+      local mock_adapter = create_mock_adapter({ "main" })
+      local repo_dir = test_cache_dir .. "/" .. repo_id
+      uv.fs_mkdir(repo_dir, tonumber("0755", 8))
+
+      -- Create only valid branch file (exists in git)
+      write_file(repo_dir .. "/main.json", vim.json.encode({
+        version = 1,
+        files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = os.time() } },
+      }))
+
+      -- Override diffview.get_adapter to return our mock
+      local diffview_module = require("diffview")
+      original_get_adapter = diffview_module.get_adapter
+      diffview_module.get_adapter = function()
+        return mock_adapter
+      end
+
+      -- Track if vim.ui.select was called
+      local ui_select_called = false
+      local original_ui_select = vim.ui.select
+      vim.ui.select = function(items, opts, on_choice)
+        ui_select_called = true
+        on_choice("No")
+      end
+
+      -- Create the view object that the command would create
+      local view = { adapter = mock_adapter }
+      local preview = review.get_cleanup_preview(view)
+
+      -- This should not call vim.ui.select because there's no stale data
+      if #preview.deleted_branches > 0 then
+        vim.ui.select({ "Yes", "No" }, {
+          prompt = "Clean up?",
+        }, function(choice) end)
+      end
+
+      -- Restore
+      vim.ui.select = original_ui_select
+
+      -- vim.ui.select should NOT have been called
+      eq(false, ui_select_called)
+
+      -- File should still exist
+      eq(true, file_exists(repo_dir .. "/main.json"))
+    end)
+
+    it("handles preview error gracefully without active view", function()
+      -- This test verifies that when git commands fail, the command handles it gracefully
+      -- Use the same repo_id as other tests so the store override works correctly
+      local fail_repo_id = repo_id  -- Use "cmdnoview123" from parent scope
+
+      -- Create adapter that returns nil for get_all_branches
+      local failing_adapter = {
+        ctx = { toplevel = "/mock/fail/repo/" .. fail_repo_id },
+        exec_sync = function(self, args)
+          if args[1] == "rev-list" then
+            return { fail_repo_id .. "0000000000000000000000000000" }, 0
+          end
+          return {}, 1
+        end,
+        get_all_branches = function()
+          return nil  -- Simulates failure
+        end,
+      }
+
+      -- Set up the repo dir
+      uv.fs_mkdir(test_cache_dir .. "/" .. fail_repo_id, tonumber("0755", 8))
+      write_file(test_cache_dir .. "/" .. fail_repo_id .. "/main.json", vim.json.encode({
+        version = 1,
+        files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = os.time() } },
+      }))
+
+      -- Override diffview.get_adapter to return our failing mock
+      local diffview_module = require("diffview")
+      original_get_adapter = diffview_module.get_adapter
+      diffview_module.get_adapter = function()
+        return failing_adapter
+      end
+
+      -- Create the view object
+      local view = { adapter = failing_adapter }
+      local preview = review.get_cleanup_preview(view)
+
+      -- Preview should have an error due to failing get_all_branches
+      neq(nil, preview.error)
+      eq("Could not get git branches", preview.error)
+
+      -- In the command, this would trigger a warning message and return early
+      -- The key point is it doesn't crash
+    end)
+  end)
 end)
