@@ -689,4 +689,330 @@ describe("diffview.review cleanup operations", function()
       eq(false, file_exists(repo_dir .. "/old-stale.json"))
     end)
   end)
+
+  describe("Public cleanup API (review.lua)", function()
+    local review = require("diffview.review")
+    local config = require("diffview.config")
+    local store
+    local repo_id = "publicapi123"  -- exactly 12 characters
+    local original_config
+    local original_get_store
+
+    -- Create a mock adapter for testing
+    local function create_mock_adapter(branches, repo_id_override)
+      local actual_repo_id = repo_id_override or repo_id
+      return {
+        ctx = {
+          toplevel = "/mock/public/repo/" .. actual_repo_id,
+        },
+        exec_sync = function(self, args, opts)
+          if args[1] == "rev-list" and args[2] == "--max-parents=0" then
+            -- Return a 40-character SHA that starts with the repo_id
+            return { actual_repo_id .. "0000000000000000000000000000" }, 0
+          end
+          return {}, 1
+        end,
+        get_all_branches = function(self)
+          return branches
+        end,
+      }
+    end
+
+    before_each(function()
+      rm_rf(test_cache_dir)
+      store = ReviewStore()
+      store.cache_dir = test_cache_dir
+      uv.fs_mkdir(test_cache_dir, tonumber("0755", 8))
+
+      -- Store original config and ensure review is enabled
+      original_config = vim.deepcopy(config.get_config())
+
+      -- Store and override review_store.get_store to return our test store
+      original_get_store = review_store.get_store
+      review_store.get_store = function()
+        return store
+      end
+    end)
+
+    after_each(function()
+      rm_rf(test_cache_dir)
+      -- Restore original config
+      if original_config then
+        config._config = original_config
+      end
+      -- Restore original get_store
+      if original_get_store then
+        review_store.get_store = original_get_store
+      end
+    end)
+
+    describe("review.get_cleanup_preview()", function()
+      it("returns error when review is disabled", function()
+        -- Disable review in config
+        local cfg = config.get_config()
+        cfg.review = { enabled = false }
+
+        local result = review.get_cleanup_preview({ adapter = create_mock_adapter({ "main" }) })
+        eq("Review is disabled", result.error)
+        eq({}, result.deleted_branches)
+        eq(0, result.deleted_count)
+      end)
+
+      it("returns error when view is nil", function()
+        local cfg = config.get_config()
+        cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+        local result = review.get_cleanup_preview(nil)
+        eq("No adapter available", result.error)
+        eq({}, result.deleted_branches)
+        eq(0, result.deleted_count)
+      end)
+
+      it("returns error when view.adapter is nil", function()
+        local cfg = config.get_config()
+        cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+        local result = review.get_cleanup_preview({ adapter = nil })
+        eq("No adapter available", result.error)
+        eq({}, result.deleted_branches)
+        eq(0, result.deleted_count)
+      end)
+
+      it("returns correct preview results with mock adapter", function()
+        local cfg = config.get_config()
+        cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+        local mock_adapter = create_mock_adapter({ "main" })
+        local repo_dir = test_cache_dir .. "/" .. repo_id
+        uv.fs_mkdir(repo_dir, tonumber("0755", 8))
+
+        -- Create a stale branch file (old timestamp)
+        local old_timestamp = os.time() - (60 * 24 * 60 * 60)  -- 60 days ago
+        write_file(repo_dir .. "/stale-branch.json", vim.json.encode({
+          version = 1,
+          files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = old_timestamp } },
+        }))
+
+        -- Create a valid branch file
+        write_file(repo_dir .. "/main.json", vim.json.encode({
+          version = 1,
+          files = { ["file.lua"] = { blob_hash = "def", reviewed_at = os.time() } },
+        }))
+
+        local mock_view = { adapter = mock_adapter }
+        local result = review.get_cleanup_preview(mock_view)
+
+        eq(nil, result.error)
+        eq(1, result.deleted_count)
+        eq("stale-branch", result.deleted_branches[1])
+
+        -- Files should still exist (dry run)
+        eq(true, file_exists(repo_dir .. "/stale-branch.json"))
+        eq(true, file_exists(repo_dir .. "/main.json"))
+      end)
+
+      it("respects cleanup_age_days from config", function()
+        local cfg = config.get_config()
+        cfg.review = { enabled = true, cleanup_age_days = 7 }  -- shorter threshold
+
+        local mock_adapter = create_mock_adapter({ "main" })
+        local repo_dir = test_cache_dir .. "/" .. repo_id
+        uv.fs_mkdir(repo_dir, tonumber("0755", 8))
+
+        -- Create a branch file 10 days old (would survive 30 days, but not 7)
+        local ten_days_ago = os.time() - (10 * 24 * 60 * 60)
+        write_file(repo_dir .. "/stale-branch.json", vim.json.encode({
+          version = 1,
+          files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = ten_days_ago } },
+        }))
+
+        local mock_view = { adapter = mock_adapter }
+        local result = review.get_cleanup_preview(mock_view)
+
+        eq(nil, result.error)
+        eq(1, result.deleted_count)  -- Should be deleted with 7-day threshold
+      end)
+    end)
+
+    describe("review.cleanup_stale_reviews()", function()
+      it("returns error when review is disabled", function()
+        local cfg = config.get_config()
+        cfg.review = { enabled = false }
+
+        local result = review.cleanup_stale_reviews({ adapter = create_mock_adapter({ "main" }) })
+        eq("Review is disabled", result.error)
+        eq({}, result.deleted_branches)
+        eq(0, result.deleted_count)
+      end)
+
+      it("returns error when view is nil", function()
+        local cfg = config.get_config()
+        cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+        local result = review.cleanup_stale_reviews(nil)
+        eq("No adapter available", result.error)
+        eq({}, result.deleted_branches)
+        eq(0, result.deleted_count)
+      end)
+
+      it("returns error when view.adapter is nil", function()
+        local cfg = config.get_config()
+        cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+        local result = review.cleanup_stale_reviews({ adapter = nil })
+        eq("No adapter available", result.error)
+        eq({}, result.deleted_branches)
+        eq(0, result.deleted_count)
+      end)
+
+      it("emits review_cleanup_completed event on successful cleanup", function()
+        local cfg = config.get_config()
+        cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+        local mock_adapter = create_mock_adapter({ "main" })
+        local repo_dir = test_cache_dir .. "/" .. repo_id
+        uv.fs_mkdir(repo_dir, tonumber("0755", 8))
+
+        -- Create a stale branch file
+        local old_timestamp = os.time() - (60 * 24 * 60 * 60)
+        write_file(repo_dir .. "/stale-branch.json", vim.json.encode({
+          version = 1,
+          files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = old_timestamp } },
+        }))
+
+        -- Track emitted events
+        local emitted_event = nil
+        local emitted_data = nil
+        local original_emit = DiffviewGlobal.emitter.emit
+        DiffviewGlobal.emitter.emit = function(self, event, data)
+          if event == "review_cleanup_completed" then
+            emitted_event = event
+            emitted_data = data
+          end
+          return original_emit(self, event, data)
+        end
+
+        local mock_view = { adapter = mock_adapter }
+        local result = review.cleanup_stale_reviews(mock_view)
+
+        -- Restore the original emit
+        DiffviewGlobal.emitter.emit = original_emit
+
+        eq(nil, result.error)
+        eq(1, result.deleted_count)
+
+        -- Verify event was emitted
+        eq("review_cleanup_completed", emitted_event)
+        neq(nil, emitted_data)
+        eq(mock_view, emitted_data.view)
+        eq(1, emitted_data.deleted_count)
+        eq("stale-branch", emitted_data.deleted_branches[1])
+      end)
+
+      it("does not emit event when no files are deleted", function()
+        local cfg = config.get_config()
+        cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+        local mock_adapter = create_mock_adapter({ "main" })
+        local repo_dir = test_cache_dir .. "/" .. repo_id
+        uv.fs_mkdir(repo_dir, tonumber("0755", 8))
+
+        -- Create only a valid branch file
+        write_file(repo_dir .. "/main.json", vim.json.encode({
+          version = 1,
+          files = { ["file.lua"] = { blob_hash = "def", reviewed_at = os.time() } },
+        }))
+
+        -- Track emitted events
+        local event_emitted = false
+        local original_emit = DiffviewGlobal.emitter.emit
+        DiffviewGlobal.emitter.emit = function(self, event, data)
+          if event == "review_cleanup_completed" then
+            event_emitted = true
+          end
+          return original_emit(self, event, data)
+        end
+
+        local mock_view = { adapter = mock_adapter }
+        local result = review.cleanup_stale_reviews(mock_view)
+
+        -- Restore the original emit
+        DiffviewGlobal.emitter.emit = original_emit
+
+        eq(nil, result.error)
+        eq(0, result.deleted_count)
+        eq(false, event_emitted)  -- No event should be emitted
+      end)
+
+      it("actually deletes correct files from disk", function()
+        local cfg = config.get_config()
+        cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+        local mock_adapter = create_mock_adapter({ "main", "develop" })
+        local repo_dir = test_cache_dir .. "/" .. repo_id
+        uv.fs_mkdir(repo_dir, tonumber("0755", 8))
+
+        local old_timestamp = os.time() - (60 * 24 * 60 * 60)
+        local recent_timestamp = os.time() - (7 * 24 * 60 * 60)
+
+        -- Valid branches (should be preserved)
+        write_file(repo_dir .. "/main.json", vim.json.encode({
+          version = 1,
+          files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = old_timestamp } },
+        }))
+        write_file(repo_dir .. "/develop.json", vim.json.encode({
+          version = 1,
+          files = { ["file.lua"] = { blob_hash = "def", reviewed_at = old_timestamp } },
+        }))
+
+        -- Stale branch, old (should be deleted)
+        write_file(repo_dir .. "/deleted-branch.json", vim.json.encode({
+          version = 1,
+          files = { ["file.lua"] = { blob_hash = "ghi", reviewed_at = old_timestamp } },
+        }))
+
+        -- Stale branch, recent (should be preserved due to age)
+        write_file(repo_dir .. "/recently-deleted.json", vim.json.encode({
+          version = 1,
+          files = { ["file.lua"] = { blob_hash = "jkl", reviewed_at = recent_timestamp } },
+        }))
+
+        local mock_view = { adapter = mock_adapter }
+        local result = review.cleanup_stale_reviews(mock_view)
+
+        eq(nil, result.error)
+        eq(1, result.deleted_count)
+        eq("deleted-branch", result.deleted_branches[1])
+
+        -- Verify file states
+        eq(true, file_exists(repo_dir .. "/main.json"))
+        eq(true, file_exists(repo_dir .. "/develop.json"))
+        eq(false, file_exists(repo_dir .. "/deleted-branch.json"))
+        eq(true, file_exists(repo_dir .. "/recently-deleted.json"))
+      end)
+
+      it("respects cleanup_age_days from config when deleting", function()
+        local cfg = config.get_config()
+        cfg.review = { enabled = true, cleanup_age_days = 5 }  -- Very short threshold
+
+        local mock_adapter = create_mock_adapter({ "main" })
+        local repo_dir = test_cache_dir .. "/" .. repo_id
+        uv.fs_mkdir(repo_dir, tonumber("0755", 8))
+
+        -- Create a branch file 10 days old (would survive 30 days, but not 5)
+        local ten_days_ago = os.time() - (10 * 24 * 60 * 60)
+        write_file(repo_dir .. "/stale-branch.json", vim.json.encode({
+          version = 1,
+          files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = ten_days_ago } },
+        }))
+
+        local mock_view = { adapter = mock_adapter }
+        local result = review.cleanup_stale_reviews(mock_view)
+
+        eq(nil, result.error)
+        eq(1, result.deleted_count)  -- Should be deleted with 5-day threshold
+        eq(false, file_exists(repo_dir .. "/stale-branch.json"))
+      end)
+    end)
+  end)
 end)
