@@ -191,6 +191,45 @@ Clearing repository state is useful when:
 - A repository has been relocated or removed
 - You want to clear all historical review data across all branches
 
+### Cleaning Up Stale Review Data
+
+Over time, as you review PRs and branches get merged and deleted, the review
+data for those branches becomes stale. The cleanup functionality helps manage
+this accumulated data.
+
+**Manual cleanup:**
+
+```vim
+" Preview what would be cleaned up (dry-run)
+:DiffviewReviewCleanup!
+
+" Clean up with confirmation prompt
+:DiffviewReviewCleanup
+```
+
+The cleanup command compares your stored review data against existing git branches
+(both local and remote-tracking). Review data for branches that no longer exist
+will be removed, but only if it's older than the configured age threshold
+(default: 30 days).
+
+You can also trigger cleanup from within a DiffView using the `review_cleanup`
+action (not mapped by default), which shows a preview and prompts for confirmation.
+
+**Automatic cleanup:**
+
+If you prefer automatic cleanup, you can enable it in your config:
+
+```lua
+review = {
+  auto_cleanup = true,     -- Clean up on DiffView open
+  cleanup_age_days = 14,   -- Only clean data older than 14 days
+}
+```
+
+When enabled, stale review data is cleaned up silently in the background each
+time you open a DiffView. An info message is shown only when files are actually
+removed.
+
 ## Inspecting Diffs for Stashes
 
 The latest Git stash is always stored in the reference `refs/stash`. We can
