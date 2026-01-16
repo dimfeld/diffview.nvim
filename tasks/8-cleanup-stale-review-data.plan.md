@@ -16,7 +16,7 @@ references:
 planGeneratedAt: 2026-01-16T10:13:56.188Z
 promptsGeneratedAt: 2026-01-16T10:13:56.188Z
 createdAt: 2026-01-15T01:45:14.898Z
-updatedAt: 2026-01-16T10:24:48.310Z
+updatedAt: 2026-01-16T10:33:14.408Z
 tasks:
   - title: Add branch listing methods to ReviewStore
     done: true
@@ -45,13 +45,13 @@ tasks:
       files based on age. Only deletes stale branches that are also older than
       max_age_days.
   - title: Add public cleanup API to review.lua
-    done: false
+    done: true
     description: Add get_cleanup_preview(view) and cleanup_stale_reviews(view)
       functions to lua/diffview/review.lua. These wrap the ReviewStore cleanup
       methods and emit review_cleanup_completed event on success. Read
       cleanup_age_days from config.
   - title: Add cleanup configuration options
-    done: false
+    done: true
     description: Add auto_cleanup (boolean, default false) and cleanup_age_days
       (integer, default 30) to the review section of config defaults in
       lua/diffview/config.lua.
@@ -97,7 +97,7 @@ tasks:
       double-underscore ambiguity, detached HEAD age-based cleanup, max_age_days
       parameter."
   - title: Write tests for public cleanup API
-    done: false
+    done: true
     description: "Add tests for review.cleanup_stale_reviews() and
       review.get_cleanup_preview(): disabled review, no view, event emission,
       correct file deletion."
@@ -863,40 +863,41 @@ Create comprehensive tests:
 
 ## Current Progress
 ### Current State
-- Core cleanup infrastructure implemented and tested
-- ReviewStore methods for branch listing, timestamp extraction, and cleanup logic complete
-- GitAdapter method for listing all branches complete
+- Core cleanup infrastructure complete (ReviewStore and GitAdapter methods)
+- Public cleanup API added to review.lua with full test coverage
+- Configuration options for cleanup added to config.lua
 
 ### Completed (So Far)
 - Task 1: unsanitize_branch() helper and get_stored_branches(repo_id) in ReviewStore
 - Task 2: get_all_branches() method in GitAdapter (local + remote branches, with short form extraction)
 - Task 3: get_latest_review_timestamp(file_path) in ReviewStore
 - Task 4: cleanup_stale_branches(adapter, opts) in ReviewStore with dry_run and max_age_days support
-- Task 12: Tests for branch listing methods (37 tests in review_cleanup_spec.lua)
+- Task 5: get_cleanup_preview() and cleanup_stale_reviews() in review.lua
+- Task 6: auto_cleanup and cleanup_age_days config options in config.lua
+- Task 12: Tests for branch listing methods
 - Task 13: Tests for timestamp extraction
 - Task 14: Tests for cleanup_stale_branches
+- Task 15: Tests for public cleanup API (49 tests total in review_cleanup_spec.lua)
 - Additional: Unit tests for GitAdapter:get_all_branches() added to git_adapter_spec.lua
+- Additional: Updated review_api_spec.lua integration test to include new cleanup functions
 
 ### Remaining
-- Task 5: Public cleanup API in review.lua (get_cleanup_preview, cleanup_stale_reviews)
-- Task 6: Configuration options (auto_cleanup, cleanup_age_days) in config.lua
 - Task 7: review_cleanup action in actions.lua
 - Task 8: review_cleanup listener in listeners.lua
 - Task 9: DiffviewReviewCleanup command in plugin/diffview.lua
 - Task 10: Auto-cleanup on DiffView open in diff_view.lua
 - Task 11: Cleanup event emitter in init.lua
-- Task 15: Tests for public cleanup API
 
 ### Next Iteration Guidance
-- Start with Task 5 (public API) and Task 6 (config options) as they are foundational for the remaining tasks
-- Then implement Tasks 7-9 (action, listener, command) together as they form the manual cleanup workflow
-- Tasks 10-11 (auto-cleanup, event emitter) can be done last
-- Task 15 should follow Task 5
+- Implement Tasks 7-9 (action, listener, command) together as they form the manual cleanup workflow
+- Tasks 10-11 (auto-cleanup, event emitter) can be done after
+- The public API (get_cleanup_preview, cleanup_stale_reviews) and config are ready for the listener/command to use
 
 ### Decisions / Changes
 - Double-underscore ambiguity handled by checking both possible branch names (conservative approach)
 - Age-based cleanup only applies to stale branches AND detached HEAD files
 - Files with undeterminable timestamps are skipped (conservative behavior)
+- cleanup_stale_reviews emits review_cleanup_completed event only when files are actually deleted
 
 ### Risks / Blockers
 - None
