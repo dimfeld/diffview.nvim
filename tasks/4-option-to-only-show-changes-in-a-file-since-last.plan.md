@@ -5,7 +5,7 @@ goal: ""
 id: 4
 uuid: 0b764a53-420b-410c-8e39-5e5688e97542
 generatedBy: agent
-status: in_progress
+status: done
 priority: medium
 dependencies:
   - 7
@@ -16,7 +16,7 @@ references:
 planGeneratedAt: 2026-01-16T02:05:48.392Z
 promptsGeneratedAt: 2026-01-16T02:05:48.392Z
 createdAt: 2026-01-15T00:26:26.637Z
-updatedAt: 2026-01-16T02:58:00.495Z
+updatedAt: 2026-01-16T03:03:58.621Z
 tasks:
   - title: Extend ReviewEntry to store commit hash
     done: true
@@ -99,7 +99,7 @@ tasks:
       correct revision used for diff, fallback when commit unavailable, mode
       indicator display, interaction with filter."
   - title: Update documentation
-    done: false
+    done: true
     description: Update doc/diffview.txt with new keybindings and actions. Update
       USAGE.md with section explaining filter and since-review mode features.
       Add notes about commit availability after force-push.
@@ -845,9 +845,11 @@ Add section explaining:
 
 ## Current Progress
 ### Current State
-- File panel filtering feature fully implemented (Tasks 1-8 complete)
-- Since-review diff mode feature fully implemented (Tasks 9-13 complete)
-- All tests pass (269 total tests including 27 new since-review tests)
+- All tasks complete. Plan fully implemented.
+- File panel filtering feature fully implemented (Tasks 1-8)
+- Since-review diff mode feature fully implemented (Tasks 9-13)
+- Tests comprehensive and passing (269 total tests)
+- Documentation complete (Task 16)
 
 ### Completed (So Far)
 - Task 1: Added `commit_hash` optional field to ReviewEntry in review_store.lua
@@ -865,16 +867,13 @@ Add section explaining:
 - Task 13: Added visual indicator via `nvim_echo` showing `[Since review: abc1234]` when opening file in since-review mode
 - Task 14: Verified existing filter tests in review_filter_spec.lua (22 comprehensive tests)
 - Task 15: Created since_review_diff_spec.lua with 27 tests covering mode toggle, commit verification, fallback behavior, etc.
+- Task 16: Updated doc/diffview.txt with keybinding docs for `<leader>rf` and `<leader>rs`; USAGE.md already had complete feature documentation
 
 ### Remaining
-- Task 16: Update documentation (doc/diffview.txt, USAGE.md)
+- None
 
 ### Next Iteration Guidance
-- Task 16 requires updating documentation with:
-  - New keybindings (`<leader>rs` for since-review toggle)
-  - New actions (`review_toggle_since_review`)
-  - Explanation of since-review diff mode
-  - Notes about commit availability after force-push
+- None - all tasks complete
 
 ### Decisions / Changes
 - commit_hash is optional in ReviewEntry for backward compatibility with existing saved state
