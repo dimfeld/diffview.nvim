@@ -16,7 +16,7 @@ references:
 planGeneratedAt: 2026-01-16T10:13:56.188Z
 promptsGeneratedAt: 2026-01-16T10:13:56.188Z
 createdAt: 2026-01-15T01:45:14.898Z
-updatedAt: 2026-01-16T10:33:14.408Z
+updatedAt: 2026-01-16T10:49:53.957Z
 tasks:
   - title: Add branch listing methods to ReviewStore
     done: true
@@ -56,16 +56,16 @@ tasks:
       (integer, default 30) to the review section of config defaults in
       lua/diffview/config.lua.
   - title: Add review_cleanup action
-    done: false
+    done: true
     description: Add review_cleanup to the action_names array in
       lua/diffview/actions.lua so it can be triggered via keymaps.
   - title: Add review_cleanup listener
-    done: false
+    done: true
     description: Add review_cleanup listener function to
       lua/diffview/scene/views/diff/listeners.lua. Shows preview first, then
       prompts for confirmation with vim.ui.select before performing cleanup.
   - title: Add DiffviewReviewCleanup command
-    done: false
+    done: true
     description: Add DiffviewReviewCleanup command to plugin/diffview.lua. Supports
       bang (!) for dry-run preview mode. Works with or without an active
       DiffView by creating a temporary adapter if needed.
@@ -131,6 +131,7 @@ changedFiles:
   - lua/diffview/tests/functional/since_review_diff_spec.lua
   - lua/diffview/ui/models/file_tree/file_tree.lua
   - lua/diffview/vcs/adapters/git/init.lua
+  - plugin/diffview.lua
 tags: []
 ---
 
@@ -866,6 +867,7 @@ Create comprehensive tests:
 - Core cleanup infrastructure complete (ReviewStore and GitAdapter methods)
 - Public cleanup API added to review.lua with full test coverage
 - Configuration options for cleanup added to config.lua
+- Manual cleanup workflow complete: action, listener, command, and documentation
 
 ### Completed (So Far)
 - Task 1: unsanitize_branch() helper and get_stored_branches(repo_id) in ReviewStore
@@ -874,30 +876,32 @@ Create comprehensive tests:
 - Task 4: cleanup_stale_branches(adapter, opts) in ReviewStore with dry_run and max_age_days support
 - Task 5: get_cleanup_preview() and cleanup_stale_reviews() in review.lua
 - Task 6: auto_cleanup and cleanup_age_days config options in config.lua
+- Task 7: review_cleanup action registered in actions.lua
+- Task 8: review_cleanup listener in listeners.lua with confirmation dialog
+- Task 9: DiffviewReviewCleanup command in plugin/diffview.lua (works with/without active view, supports dry-run via bang)
 - Task 12: Tests for branch listing methods
 - Task 13: Tests for timestamp extraction
 - Task 14: Tests for cleanup_stale_branches
-- Task 15: Tests for public cleanup API (49 tests total in review_cleanup_spec.lua)
+- Task 15: Tests for public cleanup API (63 tests total in review_cleanup_spec.lua)
 - Additional: Unit tests for GitAdapter:get_all_branches() added to git_adapter_spec.lua
 - Additional: Updated review_api_spec.lua integration test to include new cleanup functions
+- Additional: Documentation for command and action in doc/diffview.txt
 
 ### Remaining
-- Task 7: review_cleanup action in actions.lua
-- Task 8: review_cleanup listener in listeners.lua
-- Task 9: DiffviewReviewCleanup command in plugin/diffview.lua
 - Task 10: Auto-cleanup on DiffView open in diff_view.lua
 - Task 11: Cleanup event emitter in init.lua
 
 ### Next Iteration Guidance
-- Implement Tasks 7-9 (action, listener, command) together as they form the manual cleanup workflow
-- Tasks 10-11 (auto-cleanup, event emitter) can be done after
-- The public API (get_cleanup_preview, cleanup_stale_reviews) and config are ready for the listener/command to use
+- Tasks 10-11 (auto-cleanup, event emitter) are all that remain
+- Task 11 adds event emitter that task 10 relies on, but task 5's cleanup_stale_reviews already emits the event - task 11 just connects it to the user autocommand
+- Can implement both together as they complete the auto-cleanup feature
 
 ### Decisions / Changes
 - Double-underscore ambiguity handled by checking both possible branch names (conservative approach)
 - Age-based cleanup only applies to stale branches AND detached HEAD files
 - Files with undeterminable timestamps are skipped (conservative behavior)
 - cleanup_stale_reviews emits review_cleanup_completed event only when files are actually deleted
+- Command works both with and without active DiffView - implements confirmation dialog inline when no view is active
 
 ### Risks / Blockers
 - None
