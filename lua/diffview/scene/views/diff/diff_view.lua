@@ -654,6 +654,10 @@ function DiffView:init_review_event_listeners()
 
   self.review_event_callbacks.all_cleared = function(_, payload)
     if payload.view == self then
+      -- Disable review filter if active since there's nothing to filter
+      if self.review_filter_enabled then
+        self.review_filter_enabled = false
+      end
       refresh_panel()
     end
   end
