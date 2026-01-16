@@ -250,8 +250,10 @@ DiffView._create_since_review_entry = function(self, file, review_entry)
   }
 
   -- Create a get_data function that retrieves content via blob hash for the left side
+  -- and the original revision for the right side
   local blob_hash = review_entry.blob_hash
   local adapter = self.adapter
+  local right_rev = file.revs.b
   local get_data = function(kind, path, pos)
     if pos == "left" then
       -- Retrieve content directly from the blob hash
@@ -264,9 +266,33 @@ DiffView._create_since_review_entry = function(self, file, review_entry)
       end
       -- Return empty on error (will show as empty file in diff)
       return {}
+    else
+      -- For right side, fetch using the original right revision
+      -- Note: LOCAL files are handled before get_data is called (early return in create_buffer)
+      -- This handles COMMIT/STAGE types for commit-to-commit diffs
+      if right_rev and right_rev.commit then
+        local rev_spec = fmt("%s:%s", right_rev.commit, path)
+        local out, code = adapter:exec_sync({
+          "show", rev_spec,
+        }, { cwd = adapter.ctx.toplevel, silent = true })
+
+        if code == 0 and out then
+          return out
+        end
+      elseif right_rev and right_rev.stage then
+        -- Handle staged files
+        local rev_spec = fmt(":%d:%s", right_rev.stage, path)
+        local out, code = adapter:exec_sync({
+          "show", rev_spec,
+        }, { cwd = adapter.ctx.toplevel, silent = true })
+
+        if code == 0 and out then
+          return out
+        end
+      end
+      -- Return empty if we can't get content
+      return {}
     end
-    -- For right side, return nil to use default behavior
-    return nil
   end
 
   -- Create a new FileEntry with the modified revisions and custom get_data
@@ -940,6 +966,7 @@ end
 ---Toggle since-review diff mode.
 ---When enabled, files with "changed" status show only changes since the
 ---commit where they were last marked as reviewed.
+---Also enables the review filter to show only files pending review.
 function DiffView:toggle_since_review_mode()
   if not self.review_state then
     utils.info("Review mode is not enabled")
@@ -948,9 +975,26 @@ function DiffView:toggle_since_review_mode()
 
   self.since_review_mode = not self.since_review_mode
 
+  -- When enabling since-review mode, also enable the review filter
+  -- to show only files that need attention (unreviewed or changed)
+  if self.since_review_mode and not self.review_filter_enabled then
+    self.review_filter_enabled = true
+    if self.panel and self.panel.update_components then
+      self.panel:update_components()
+    end
+  end
+
   -- Provide feedback about the mode change
   if self.since_review_mode then
-    api.nvim_echo({{ "Since-review mode ON: showing changes since last review for changed files" }}, false, {})
+    local visible_count = 0
+    local total_count = 0
+    if self.panel and self.panel.ordered_file_list then
+      visible_count = #self.panel:ordered_file_list()
+    end
+    if self.files and self.files.len then
+      total_count = self.files:len()
+    end
+    api.nvim_echo({{ fmt("Since-review mode ON: showing %d/%d files (changed files show diff since last review)", visible_count, total_count) }}, false, {})
   else
     api.nvim_echo({{ "Since-review mode OFF: showing full diff" }}, false, {})
   end
@@ -961,14 +1005,35 @@ function DiffView:toggle_since_review_mode()
     if status == "changed" then
       self:_set_file(self.cur_entry)
     elseif self.since_review_mode then
-      -- File is not "changed", so mode won't affect it
+      -- Current file is not "changed" - show info and try to navigate to a changed file
       utils.info("Since-review mode only affects files with 'changed' status")
+
+      if self.panel and self.panel.ordered_file_list then
+        -- Current file might be filtered out, navigate to first visible file
+        local visible_files = self.panel:ordered_file_list()
+        if #visible_files > 0 then
+          local cur_visible = false
+          for _, file in ipairs(visible_files) do
+            if file == self.cur_entry then
+              cur_visible = true
+              break
+            end
+          end
+          if not cur_visible and self.panel.set_cur_file and self.panel.highlight_file then
+            self.panel:set_cur_file(visible_files[1])
+            self.panel:highlight_file(visible_files[1])
+            self:_set_file(visible_files[1])
+          end
+        end
+      end
     end
   end
 
   -- Update panel to show mode indicator
-  self.panel:render()
-  self.panel:redraw()
+  if self.panel then
+    if self.panel.render then self.panel:render() end
+    if self.panel.redraw then self.panel:redraw() end
+  end
 end
 
 ---Get the review entry for a file if it exists and has blob_hash.
