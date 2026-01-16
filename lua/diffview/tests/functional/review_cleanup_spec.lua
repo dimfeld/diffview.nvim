@@ -1015,4 +1015,312 @@ describe("diffview.review cleanup operations", function()
       end)
     end)
   end)
+
+  describe("review_cleanup listener", function()
+    local listeners_module
+    local original_config
+    local config = require("diffview.config")
+
+    before_each(function()
+      rm_rf(test_cache_dir)
+      original_config = vim.deepcopy(config.get_config())
+      listeners_module = require("diffview.scene.views.diff.listeners")
+    end)
+
+    after_each(function()
+      rm_rf(test_cache_dir)
+      config._config = original_config
+    end)
+
+    -- Helper to create a mock view for listener tests
+    local function create_cleanup_mock_view(opts)
+      opts = opts or {}
+      local repo_id = opts.repo_id or "listener1234"  -- 12 characters
+
+      local mock_adapter = {
+        ctx = {
+          toplevel = "/mock/listener/repo/" .. repo_id,
+        },
+        exec_sync = function(self, args, exec_opts)
+          if args[1] == "rev-list" and args[2] == "--max-parents=0" then
+            return { repo_id .. "0000000000000000000000000000" }, 0
+          end
+          return {}, 1
+        end,
+        get_all_branches = function(self)
+          return opts.branches or { "main" }
+        end,
+      }
+
+      return {
+        adapter = mock_adapter,
+        review_state = opts.review_state or { files = {}, branch = "main" },
+        files = { iter = function() return function() end end },
+        infer_cur_file = function() return nil end,
+      }
+    end
+
+    it("shows info when review feature is disabled", function()
+      local cfg = config.get_config()
+      cfg.review = { enabled = false }
+
+      local mock_view = create_cleanup_mock_view()
+      local listeners = listeners_module(mock_view)
+
+      -- Should not error
+      listeners.review_cleanup()
+    end)
+
+    it("shows warning when preview fails", function()
+      local cfg = config.get_config()
+      cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+      -- Create adapter that will fail get_all_branches
+      local mock_view = {
+        adapter = {
+          ctx = { toplevel = "/mock/fail/repo" },
+          exec_sync = function(self, args)
+            if args[1] == "rev-list" then
+              return { "failingrepo0000000000000000000000000000" }, 0
+            end
+            return {}, 1
+          end,
+          get_all_branches = function()
+            return nil  -- Simulates failure
+          end,
+        },
+        review_state = { files = {}, branch = "main" },
+        files = { iter = function() return function() end end },
+        infer_cur_file = function() return nil end,
+      }
+
+      -- Override get_store
+      local test_store = ReviewStore()
+      test_store.cache_dir = test_cache_dir
+      uv.fs_mkdir(test_cache_dir, tonumber("0755", 8))
+      uv.fs_mkdir(test_cache_dir .. "/failingrepo", tonumber("0755", 8))
+      write_file(test_cache_dir .. "/failingrepo/main.json", '{"version":1,"files":{}}')
+
+      local original_get_store = review_store.get_store
+      review_store.get_store = function() return test_store end
+
+      local listeners = listeners_module(mock_view)
+
+      -- Should not error, just show warning
+      listeners.review_cleanup()
+
+      review_store.get_store = original_get_store
+    end)
+
+    it("shows info when no stale data found", function()
+      local cfg = config.get_config()
+      cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+      local mock_view = create_cleanup_mock_view({ branches = { "main" } })
+      local repo_id = "listener1234"
+
+      -- Override get_store
+      local test_store = ReviewStore()
+      test_store.cache_dir = test_cache_dir
+      uv.fs_mkdir(test_cache_dir, tonumber("0755", 8))
+      uv.fs_mkdir(test_cache_dir .. "/" .. repo_id, tonumber("0755", 8))
+      -- Create file for existing branch (main)
+      write_file(test_cache_dir .. "/" .. repo_id .. "/main.json", vim.json.encode({
+        version = 1,
+        files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = os.time() } },
+      }))
+
+      local original_get_store = review_store.get_store
+      review_store.get_store = function() return test_store end
+
+      local listeners = listeners_module(mock_view)
+
+      -- Should not error, shows info
+      listeners.review_cleanup()
+
+      review_store.get_store = original_get_store
+    end)
+
+    it("calls vim.ui.select when stale branches are found", function()
+      local cfg = config.get_config()
+      cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+      local mock_view = create_cleanup_mock_view({ branches = { "main" } })
+      local repo_id = "listener1234"
+
+      -- Override get_store
+      local test_store = ReviewStore()
+      test_store.cache_dir = test_cache_dir
+      uv.fs_mkdir(test_cache_dir, tonumber("0755", 8))
+      uv.fs_mkdir(test_cache_dir .. "/" .. repo_id, tonumber("0755", 8))
+
+      -- Create stale branch file
+      local old_timestamp = os.time() - (60 * 24 * 60 * 60)
+      write_file(test_cache_dir .. "/" .. repo_id .. "/stale.json", vim.json.encode({
+        version = 1,
+        files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = old_timestamp } },
+      }))
+
+      local original_get_store = review_store.get_store
+      review_store.get_store = function() return test_store end
+
+      -- Track if vim.ui.select was called
+      local ui_select_called = false
+      local ui_select_items = nil
+      local original_ui_select = vim.ui.select
+      vim.ui.select = function(items, opts, on_choice)
+        ui_select_called = true
+        ui_select_items = items
+        -- Simulate user choosing "No"
+        on_choice("No")
+      end
+
+      local listeners = listeners_module(mock_view)
+      listeners.review_cleanup()
+
+      -- Restore
+      vim.ui.select = original_ui_select
+      review_store.get_store = original_get_store
+
+      -- Verify vim.ui.select was called with Yes/No options
+      eq(true, ui_select_called)
+      eq({ "Yes", "No" }, ui_select_items)
+
+      -- File should still exist since user chose "No"
+      eq(true, file_exists(test_cache_dir .. "/" .. repo_id .. "/stale.json"))
+    end)
+
+    it("deletes files when user confirms with Yes", function()
+      local cfg = config.get_config()
+      cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+      local mock_view = create_cleanup_mock_view({ branches = { "main" } })
+      local repo_id = "listener1234"
+
+      -- Override get_store
+      local test_store = ReviewStore()
+      test_store.cache_dir = test_cache_dir
+      uv.fs_mkdir(test_cache_dir, tonumber("0755", 8))
+      uv.fs_mkdir(test_cache_dir .. "/" .. repo_id, tonumber("0755", 8))
+
+      -- Create stale branch file
+      local old_timestamp = os.time() - (60 * 24 * 60 * 60)
+      write_file(test_cache_dir .. "/" .. repo_id .. "/stale.json", vim.json.encode({
+        version = 1,
+        files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = old_timestamp } },
+      }))
+
+      local original_get_store = review_store.get_store
+      review_store.get_store = function() return test_store end
+
+      -- Automatically confirm with "Yes"
+      local original_ui_select = vim.ui.select
+      vim.ui.select = function(items, opts, on_choice)
+        on_choice("Yes")
+      end
+
+      local listeners = listeners_module(mock_view)
+      listeners.review_cleanup()
+
+      -- Restore
+      vim.ui.select = original_ui_select
+      review_store.get_store = original_get_store
+
+      -- File should be deleted
+      eq(false, file_exists(test_cache_dir .. "/" .. repo_id .. "/stale.json"))
+    end)
+
+    it("does not delete files when user cancels", function()
+      local cfg = config.get_config()
+      cfg.review = { enabled = true, cleanup_age_days = 30 }
+
+      local mock_view = create_cleanup_mock_view({ branches = { "main" } })
+      local repo_id = "listener1234"
+
+      -- Override get_store
+      local test_store = ReviewStore()
+      test_store.cache_dir = test_cache_dir
+      uv.fs_mkdir(test_cache_dir, tonumber("0755", 8))
+      uv.fs_mkdir(test_cache_dir .. "/" .. repo_id, tonumber("0755", 8))
+
+      -- Create stale branch file
+      local old_timestamp = os.time() - (60 * 24 * 60 * 60)
+      write_file(test_cache_dir .. "/" .. repo_id .. "/stale.json", vim.json.encode({
+        version = 1,
+        files = { ["file.lua"] = { blob_hash = "abc", reviewed_at = old_timestamp } },
+      }))
+
+      local original_get_store = review_store.get_store
+      review_store.get_store = function() return test_store end
+
+      -- Simulate user pressing escape (nil choice)
+      local original_ui_select = vim.ui.select
+      vim.ui.select = function(items, opts, on_choice)
+        on_choice(nil)  -- User pressed escape
+      end
+
+      local listeners = listeners_module(mock_view)
+      listeners.review_cleanup()
+
+      -- Restore
+      vim.ui.select = original_ui_select
+      review_store.get_store = original_get_store
+
+      -- File should still exist
+      eq(true, file_exists(test_cache_dir .. "/" .. repo_id .. "/stale.json"))
+    end)
+  end)
+
+  describe("review_cleanup action registration", function()
+    it("review_cleanup action is registered in actions module", function()
+      local actions = require("diffview.actions")
+
+      -- Verify the action function exists
+      assert.is_function(actions.review_cleanup)
+    end)
+  end)
+
+  describe("DiffviewReviewCleanup command registration", function()
+    -- Note: Testing user commands in headless mode requires manually loading
+    -- the plugin file since test initialization only loads the Lua modules
+
+    it("command is registered when plugin file is sourced", function()
+      -- Source the plugin file to register commands
+      local plugin_path = vim.fn.fnamemodify(
+        debug.getinfo(1, "S").source:sub(2),
+        ":p:h:h:h:h:h"
+      ) .. "/plugin/diffview.lua"
+
+      -- The plugin file should exist
+      local stat = vim.loop.fs_stat(plugin_path)
+      neq(nil, stat, "Plugin file should exist at: " .. plugin_path)
+
+      -- Source it to register commands
+      vim.cmd("source " .. plugin_path)
+
+      -- Now verify the command is registered
+      local commands = vim.api.nvim_get_commands({})
+      neq(nil, commands["DiffviewReviewCleanup"], "DiffviewReviewCleanup command should be registered")
+    end)
+
+    it("command supports bang modifier for dry-run", function()
+      -- Note: This test relies on the previous test having sourced the plugin
+      local commands = vim.api.nvim_get_commands({})
+      local cmd_info = commands["DiffviewReviewCleanup"]
+
+      -- If command not found, source the plugin first
+      if not cmd_info then
+        local plugin_path = vim.fn.fnamemodify(
+          debug.getinfo(1, "S").source:sub(2),
+          ":p:h:h:h:h:h"
+        ) .. "/plugin/diffview.lua"
+        vim.cmd("source " .. plugin_path)
+        commands = vim.api.nvim_get_commands({})
+        cmd_info = commands["DiffviewReviewCleanup"]
+      end
+
+      neq(nil, cmd_info, "Command should be registered")
+      eq(true, cmd_info.bang, "Command should support bang modifier")
+    end)
+  end)
 end)
