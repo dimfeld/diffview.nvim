@@ -97,16 +97,50 @@ function FileTree:update_statuses()
   end
 end
 
+---Create component schema for rendering the tree.
+---@param data { flatten_dirs: boolean, file_filter?: fun(file: FileEntry): boolean }
+---@return CompSchema
 function FileTree:create_comp_schema(data)
   self.root:sort()
   ---@type CompSchema
   local schema = {}
+  local file_filter = data.file_filter
+
+  ---Check if a node or any of its descendants have visible files.
+  ---@param node Node
+  ---@return boolean
+  local function has_visible_files(node)
+    if not node:has_children() then
+      -- Leaf node: check if file passes filter
+      if file_filter then
+        return file_filter(node.data)
+      end
+      return true
+    end
+
+    -- Directory node: check if any child has visible files
+    for _, child in ipairs(node.children) do
+      if has_visible_files(child) then
+        return true
+      end
+    end
+    return false
+  end
 
   ---@param parent CompSchema
   ---@param node Node
   local function recurse(parent, node)
     if not node:has_children() then
+      -- Leaf node (file): apply filter
+      if file_filter and not file_filter(node.data) then
+        return
+      end
       parent[#parent + 1] = { name = "file", context = node.data }
+      return
+    end
+
+    -- Directory node: skip if no visible files in subtree
+    if file_filter and not has_visible_files(node) then
       return
     end
 
@@ -115,6 +149,10 @@ function FileTree:create_comp_schema(data)
 
     if data.flatten_dirs then
       while #node.children == 1 and node.children[1]:has_children() do
+        -- When flattening, also skip empty directories if filtering
+        if file_filter and not has_visible_files(node.children[1]) then
+          break
+        end
         ---@type DirData
         local subdir_data = node.children[1].data
         dir_data = {

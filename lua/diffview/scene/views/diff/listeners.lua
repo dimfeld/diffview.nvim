@@ -355,5 +355,8 @@ return function(view)
     review_prev_unreviewed = function()
       view:prev_unreviewed_file()
     end,
+    review_toggle_filter = function()
+      view:toggle_review_filter()
+    end,
   }
 end

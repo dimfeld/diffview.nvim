@@ -1,8 +1,10 @@
+local lazy = require("diffview.lazy")
 local config = require("diffview.config")
 local oop = require("diffview.oop")
 local renderer = require("diffview.renderer")
 local utils = require("diffview.utils")
 local Panel = require("diffview.ui.panel").Panel
+local review = lazy.require("diffview.review") ---@module "diffview.review"
 local api = vim.api
 local M = {}
 
@@ -97,24 +99,30 @@ function FilePanel:update_components()
     staged_files = { name = "files" }
 
     for _, file in ipairs(self.files.conflicting) do
-      table.insert(conflicting_files, {
-        name = "file",
-        context = file,
-      })
+      if self:should_show_file(file) then
+        table.insert(conflicting_files, {
+          name = "file",
+          context = file,
+        })
+      end
     end
 
     for _, file in ipairs(self.files.working) do
-      table.insert(working_files, {
-        name = "file",
-        context = file,
-      })
+      if self:should_show_file(file) then
+        table.insert(working_files, {
+          name = "file",
+          context = file,
+        })
+      end
     end
 
     for _, file in ipairs(self.files.staged) do
-      table.insert(staged_files, {
-        name = "file",
-        context = file,
-      })
+      if self:should_show_file(file) then
+        table.insert(staged_files, {
+          name = "file",
+          context = file,
+        })
+      end
     end
 
   elseif self.listing_style == "tree" then
@@ -122,10 +130,19 @@ function FilePanel:update_components()
     self.files.working_tree:update_statuses()
     self.files.staged_tree:update_statuses()
 
+    -- Create filter function for tree schema if review filter is enabled
+    local file_filter = nil
+    if self.view and self.view.review_filter_enabled then
+      file_filter = function(file)
+        return self:should_show_file(file)
+      end
+    end
+
     conflicting_files = utils.tbl_merge(
       { name = "files" },
       self.files.conflicting_tree:create_comp_schema({
         flatten_dirs = self.tree_options.flatten_dirs,
+        file_filter = file_filter,
       })
     )
 
@@ -133,6 +150,7 @@ function FilePanel:update_components()
       { name = "files" },
       self.files.working_tree:create_comp_schema({
         flatten_dirs = self.tree_options.flatten_dirs,
+        file_filter = file_filter,
       })
     )
 
@@ -140,6 +158,7 @@ function FilePanel:update_components()
       { name = "files" },
       self.files.staged_tree:create_comp_schema({
         flatten_dirs = self.tree_options.flatten_dirs,
+        file_filter = file_filter,
       })
     )
   end
@@ -179,8 +198,21 @@ function FilePanel:update_components()
   })
 end
 
+---Check if a file should be visible based on review filter state.
+---@param file FileEntry
+---@return boolean
+function FilePanel:should_show_file(file)
+  if not self.view or not self.view.review_filter_enabled then
+    return true
+  end
+
+  local status = review.get_file_status(self.view, file)
+  return status == "unreviewed" or status == "changed"
+end
+
 ---@return FileEntry[]
 function FilePanel:ordered_file_list()
+  local files
   if self.listing_style == "list" then
     local list = {}
 
@@ -188,7 +220,7 @@ function FilePanel:ordered_file_list()
       list[#list + 1] = file
     end
 
-    return list
+    files = list
   else
     local nodes = utils.vec_join(
       self.files.conflicting_tree.root:leaves(),
@@ -196,10 +228,23 @@ function FilePanel:ordered_file_list()
       self.files.staged_tree.root:leaves()
     )
 
-    return vim.tbl_map(function(node)
+    files = vim.tbl_map(function(node)
       return node.data
     end, nodes) --[[@as vector ]]
   end
+
+  -- Apply review filter if enabled
+  if self.view and self.view.review_filter_enabled then
+    local filtered = {}
+    for _, file in ipairs(files) do
+      if self:should_show_file(file) then
+        filtered[#filtered + 1] = file
+      end
+    end
+    return filtered
+  end
+
+  return files
 end
 
 function FilePanel:set_cur_file(file)

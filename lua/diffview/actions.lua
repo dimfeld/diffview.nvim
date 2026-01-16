@@ -639,6 +639,7 @@ local action_names = {
   "review_next_unreviewed",
   "review_prev_pending",
   "review_prev_unreviewed",
+  "review_toggle_filter",
   "select_entry",
   "select_next_entry",
   "select_prev_entry",

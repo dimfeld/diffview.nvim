@@ -50,6 +50,7 @@ local M = {}
 ---@field watcher uv_fs_poll_t # UV fs poll handle.
 ---@field review_state? ReviewState # Review state for tracking reviewed files.
 ---@field review_event_callbacks? table<string, function> # Callbacks for review event cleanup.
+---@field review_filter_enabled boolean # Whether to filter panel to show only pending review files.
 local DiffView = oop.create_class("DiffView", StandardView.__get())
 
 ---DiffView constructor
@@ -63,6 +64,7 @@ function DiffView:init(opt)
   self.right = opt.right
   self.initialized = false
   self.options = opt.options or {}
+  self.review_filter_enabled = false
   self.options.selected_file = self.options.selected_file
     and pl:chain(self.options.selected_file)
         :absolute()
@@ -730,6 +732,49 @@ function DiffView:prev_unreviewed_file()
   return self:_navigate_review_file(-1, function(status)
     return status == "unreviewed"
   end, "Unreviewed")
+end
+
+---Toggle the review filter to show only files pending review.
+---When enabled, only files with status "unreviewed" or "changed" are shown.
+function DiffView:toggle_review_filter()
+  if not self.review_state then
+    utils.info("Review mode is not enabled")
+    return
+  end
+
+  self.review_filter_enabled = not self.review_filter_enabled
+
+  -- Update the panel to reflect the filter state
+  self.panel:update_components()
+  self.panel:render()
+  self.panel:redraw()
+
+  -- If current file is now filtered out, move to first visible file
+  if self.review_filter_enabled and self.panel.cur_file then
+    local visible_files = self.panel:ordered_file_list()
+    local cur_visible = false
+    for _, file in ipairs(visible_files) do
+      if file == self.panel.cur_file then
+        cur_visible = true
+        break
+      end
+    end
+
+    if not cur_visible and #visible_files > 0 then
+      self.panel:set_cur_file(visible_files[1])
+      self.panel:highlight_file(visible_files[1])
+      self:_set_file(visible_files[1])
+    end
+  end
+
+  -- Show filter state message
+  if self.review_filter_enabled then
+    local visible_files = self.panel:ordered_file_list()
+    local total_files = self.files:len()
+    api.nvim_echo({{ ("Review filter ON: showing %d/%d files pending review"):format(#visible_files, total_files) }}, false, {})
+  else
+    api.nvim_echo({{ "Review filter OFF: showing all files" }}, false, {})
+  end
 end
 
 M.DiffView = DiffView
