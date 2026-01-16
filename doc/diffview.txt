@@ -383,6 +383,25 @@ COMMANDS                                        *diffview-commands*
                                                 *:DiffviewLog*
 :DiffviewLog            Open the debug log.
 
+                                                *:DiffviewReviewCleanup*
+:DiffviewReviewCleanup  Clean up stale review data for the current repository.
+                        Stale data includes review state for branches that no
+                        longer exist in git (local or remote-tracking).
+
+                        Shows a preview of branches to be cleaned up and
+                        prompts for confirmation before deletion. Only review
+                        data older than the configured age threshold
+                        (|diffview-config-review|, `cleanup_age_days`) will be
+                        removed.
+
+                        Works both with and without an active DiffView - when
+                        run outside of a DiffView, it uses the current working
+                        directory to determine the repository.
+
+:DiffviewReviewCleanup! Dry-run mode: shows what would be cleaned up without
+                        actually deleting anything. Use this to preview the
+                        cleanup before committing to it.
+
 ==============================================================================
 
 CONFIGURATION                                   *diffview-config*
@@ -1361,6 +1380,26 @@ review_toggle_since_review                      *diffview-actions-review_toggle_
         - The file has not been reviewed yet
         - The review was saved without commit information (legacy state)
         - The reviewed commit no longer exists (e.g., after a force-push)
+
+        Only available when review tracking is enabled.
+
+review_cleanup                                  *diffview-actions-review_cleanup*
+        Contexts: `diff_view`, `file_panel`
+
+        Clean up stale review data for the current repository. Stale data
+        includes review state for branches that no longer exist in git
+        (either as local branches or remote-tracking branches).
+
+        When triggered, shows a preview of which branches would be cleaned
+        up and prompts for confirmation before deletion. Only review data
+        older than the configured age threshold (`cleanup_age_days`) will
+        be removed.
+
+        This is useful for removing accumulated review data for branches
+        that have been merged and deleted.
+
+        See also |:DiffviewReviewCleanup| for the command-line equivalent
+        which can be used outside of a DiffView.
 
         Only available when review tracking is enabled.
 

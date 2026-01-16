@@ -62,6 +62,8 @@ command("DiffviewReviewCleanup", function(ctx)
   local utils = lazy.require("diffview.utils")
 
   local view = lib.get_current_view()
+  local has_active_view = view ~= nil
+
   if not view then
     -- Try to create a temporary adapter for current directory
     local adapter = diffview.get_adapter()
@@ -89,8 +91,43 @@ command("DiffviewReviewCleanup", function(ctx)
         table.concat(preview.deleted_branches, ", ")
       ))
     end
-  else
-    -- Trigger the action which shows confirmation UI
+  elseif has_active_view then
+    -- Use the action listener which has confirmation UI
     diffview.emit("review_cleanup")
+  else
+    -- No active view - implement confirmation dialog directly here
+    local preview = review.get_cleanup_preview(view)
+
+    if preview.error then
+      utils.warn("Cleanup preview failed: " .. preview.error)
+      return
+    end
+
+    if #preview.deleted_branches == 0 then
+      utils.info("No stale review data found for this repository")
+      return
+    end
+
+    -- Build confirmation message
+    local branch_list = table.concat(preview.deleted_branches, ", ")
+    if #branch_list > 60 then
+      branch_list = branch_list:sub(1, 57) .. "..."
+    end
+
+    vim.ui.select({ "Yes", "No" }, {
+      prompt = ("Clean up review state for %d stale branch(es)? [%s]"):format(
+        preview.deleted_count,
+        branch_list
+      ),
+    }, function(choice)
+      if choice == "Yes" then
+        local result = review.cleanup_stale_reviews(view)
+        if result.error then
+          utils.warn("Cleanup failed: " .. result.error)
+        else
+          utils.info(("Cleaned up review state for %d branch(es)"):format(result.deleted_count))
+        end
+      end
+    end)
   end
 end, { nargs = 0, bang = true })
