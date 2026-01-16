@@ -358,5 +358,8 @@ return function(view)
     review_toggle_filter = function()
       view:toggle_review_filter()
     end,
+    review_toggle_since_review = function()
+      view:toggle_since_review_mode()
+    end,
   }
 end

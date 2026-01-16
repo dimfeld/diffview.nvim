@@ -6,9 +6,11 @@ local CommitLogPanel = lazy.access("diffview.ui.panels.commit_log_panel", "Commi
 local Diff = lazy.access("diffview.diff", "Diff") ---@type Diff|LazyModule
 local EditToken = lazy.access("diffview.diff", "EditToken") ---@type EditToken|LazyModule
 local EventName = lazy.access("diffview.events", "EventName") ---@type EventName|LazyModule
+local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModule
 local FileDict = lazy.access("diffview.vcs.file_dict", "FileDict") ---@type FileDict|LazyModule
 local FileEntry = lazy.access("diffview.scene.file_entry", "FileEntry") ---@type FileEntry|LazyModule
 local FilePanel = lazy.access("diffview.scene.views.diff.file_panel", "FilePanel") ---@type FilePanel|LazyModule
+local GitRev = lazy.access("diffview.vcs.adapters.git.rev", "GitRev") ---@type GitRev|LazyModule
 local PerfTimer = lazy.access("diffview.perf", "PerfTimer") ---@type PerfTimer|LazyModule
 local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|LazyModule
 local StandardView = lazy.access("diffview.scene.views.standard.standard_view", "StandardView") ---@type StandardView|LazyModule
@@ -51,6 +53,7 @@ local M = {}
 ---@field review_state? ReviewState # Review state for tracking reviewed files.
 ---@field review_event_callbacks? table<string, function> # Callbacks for review event cleanup.
 ---@field review_filter_enabled boolean # Whether to filter panel to show only pending review files.
+---@field since_review_mode boolean # Whether to show only changes since last review for "changed" files.
 local DiffView = oop.create_class("DiffView", StandardView.__get())
 
 ---DiffView constructor
@@ -65,6 +68,7 @@ function DiffView:init(opt)
   self.initialized = false
   self.options = opt.options or {}
   self.review_filter_enabled = false
+  self.since_review_mode = false
   self.options.selected_file = self.options.selected_file
     and pl:chain(self.options.selected_file)
         :absolute()
@@ -213,6 +217,41 @@ function DiffView:close()
   end
 end
 
+---Create a modified FileEntry for since-review mode that uses the review commit as the left revision.
+---@param self DiffView
+---@param file FileEntry The original file entry
+---@param review_entry ReviewEntry The review entry with commit_hash
+---@return FileEntry modified_entry A new FileEntry with since-review revisions
+---@private
+DiffView._create_since_review_entry = function(self, file, review_entry)
+  -- Create a new Rev for the left side using the review commit
+  local review_rev = GitRev(RevType.COMMIT, review_entry.commit_hash)
+
+  -- Create the new revisions map (left = review commit, right = same as original)
+  local new_revs = {
+    a = review_rev,
+    b = file.revs.b, -- Keep the original right revision
+    c = file.revs.c,
+    d = file.revs.d,
+  }
+
+  -- Create a new FileEntry with the modified revisions
+  local since_review_entry = FileEntry.with_layout(file.layout.class, {
+    adapter = file.adapter,
+    path = file.path,
+    oldpath = file.oldpath,
+    revs = new_revs,
+    status = file.status,
+    stats = file.stats,
+    kind = file.kind,
+    commit = file.commit,
+    get_data = nil, -- Use default data fetching
+    nulled = false,
+  })
+
+  return since_review_entry
+end
+
 ---@private
 ---@param self DiffView
 ---@param file FileEntry
@@ -226,7 +265,34 @@ DiffView._set_file = async.void(function(self, file)
   self.emitter:emit("file_open_pre", file, cur_entry)
   self.nulled = false
 
-  await(self:use_entry(file))
+  -- Determine which entry to use (original or since-review modified)
+  local entry_to_use = file
+  local using_since_review = false
+
+  if self.since_review_mode then
+    local status = review.get_file_status(self, file)
+    if status == "changed" then
+      local review_entry, err = self:get_since_review_entry(file)
+      if review_entry then
+        entry_to_use = self:_create_since_review_entry(file, review_entry)
+        using_since_review = true
+        -- Show indicator that we're viewing since-review diff
+        api.nvim_echo({{ fmt("[Since review: %s]", review_entry.commit_hash:sub(1, 7)), "Comment" }}, false, {})
+      elseif err then
+        -- Fall back to full diff and warn user
+        utils.info(fmt("Since-review mode: %s - showing full diff", err))
+      end
+    end
+  end
+
+  await(self:use_entry(entry_to_use))
+
+  -- If we used a since-review entry, we need to clean it up after use
+  -- to avoid memory leaks (since it's a temporary entry)
+  if using_since_review and entry_to_use ~= file then
+    -- The layout files have been transferred to cur_layout, so we just
+    -- let the temporary entry go out of scope
+  end
 
   self.emitter:emit("file_open_post", file, cur_entry)
 
@@ -798,6 +864,83 @@ function DiffView:toggle_review_filter()
   else
     api.nvim_echo({{ "Review filter OFF: showing all files" }}, false, {})
   end
+end
+
+---Verify that a git commit exists (hasn't been garbage collected).
+---@param commit_hash string The commit hash to verify
+---@return boolean exists True if the commit exists
+function DiffView:verify_commit_exists(commit_hash)
+  if not commit_hash then
+    return false
+  end
+  local _, code = self.adapter:exec_sync({
+    "cat-file", "-e", commit_hash,
+  }, self.adapter.ctx.toplevel)
+  return code == 0
+end
+
+---Toggle since-review diff mode.
+---When enabled, files with "changed" status show only changes since the
+---commit where they were last marked as reviewed.
+function DiffView:toggle_since_review_mode()
+  if not self.review_state then
+    utils.info("Review mode is not enabled")
+    return
+  end
+
+  self.since_review_mode = not self.since_review_mode
+
+  -- Provide feedback about the mode change
+  if self.since_review_mode then
+    api.nvim_echo({{ "Since-review mode ON: showing changes since last review for changed files" }}, false, {})
+  else
+    api.nvim_echo({{ "Since-review mode OFF: showing full diff" }}, false, {})
+  end
+
+  -- Re-open the current file to reflect the new mode if it has "changed" status
+  if self.cur_entry then
+    local status = review.get_file_status(self, self.cur_entry)
+    if status == "changed" then
+      self:_set_file(self.cur_entry)
+    elseif self.since_review_mode then
+      -- File is not "changed", so mode won't affect it
+      utils.info("Since-review mode only affects files with 'changed' status")
+    end
+  end
+
+  -- Update panel to show mode indicator
+  self.panel:render()
+  self.panel:redraw()
+end
+
+---Get the review entry for a file if it exists and has commit_hash.
+---@param file_entry FileEntry
+---@return ReviewEntry|nil review_entry The review entry if valid for since-review mode
+---@return string|nil error_message Error message if since-review is not available
+function DiffView:get_since_review_entry(file_entry)
+  if not self.review_state then
+    return nil, "Review mode is not enabled"
+  end
+
+  if not file_entry or not file_entry.path then
+    return nil, "Invalid file entry"
+  end
+
+  local review_entry = self.review_state:get_file(file_entry.path)
+  if not review_entry then
+    return nil, "File has not been reviewed"
+  end
+
+  if not review_entry.commit_hash then
+    return nil, "Review was saved without commit information"
+  end
+
+  -- Verify the commit still exists
+  if not self:verify_commit_exists(review_entry.commit_hash) then
+    return nil, "Reviewed commit no longer exists (may have been rebased)"
+  end
+
+  return review_entry, nil
 end
 
 M.DiffView = DiffView

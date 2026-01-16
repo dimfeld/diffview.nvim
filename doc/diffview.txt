@@ -1275,6 +1275,29 @@ review_toggle_filter                            *diffview-actions-review_toggle_
 
         Only available when review tracking is enabled.
 
+review_toggle_since_review                      *diffview-actions-review_toggle_since_review*
+        Contexts: `diff_view`, `file_panel`
+
+        Toggle the since-review diff mode. When enabled, files with "changed"
+        status (previously reviewed but modified since) will show only the
+        changes since the commit where they were last marked as reviewed,
+        rather than the full diff from the base.
+
+        This is useful when re-reviewing a PR after updates - instead of
+        seeing the full file diff, you see only what changed since your last
+        review.
+
+        When a file is opened in since-review mode, an indicator message shows
+        the commit hash that serves as the left side of the diff (e.g.,
+        "[Since review: abc1234]").
+
+        The mode falls back to full diff gracefully when:
+        - The file has not been reviewed yet
+        - The review was saved without commit information (legacy state)
+        - The reviewed commit no longer exists (e.g., after a force-push)
+
+        Only available when review tracking is enabled.
+
 scroll_view({distance})                         *diffview-actions-scroll_view*
         Contexts: `panel`
 
@@ -1392,6 +1415,7 @@ actions:
         • |diffview-actions-review_mark_all|
         • |diffview-actions-review_mark_file|
         • |diffview-actions-review_toggle_filter|
+        • |diffview-actions-review_toggle_since_review|
         • |diffview-actions-view_windo|
 
 ==============================================================================
