@@ -2047,6 +2047,12 @@ function GitAdapter:is_binary(path, rev)
     return false
   end
 
+  -- CUSTOM type is used when caller provides get_data function (e.g., since-review mode)
+  -- The caller is responsible for the data, so we can't check if it's binary
+  if rev.type == RevType.CUSTOM then
+    return false
+  end
+
   local cmd = { "-c", "submodule.recurse=false", "grep", "-I", "--name-only", "-e", "." }
   if rev.type == RevType.LOCAL then
     cmd[#cmd+1] = "--untracked"

@@ -82,6 +82,11 @@ function Diff2.should_null(rev, status, sym)
     elseif sym == "b" then
       return status == "D"
     end
+
+  elseif rev.type == RevType.CUSTOM then
+    -- CUSTOM type is used for since-review mode where we provide custom get_data
+    -- The caller explicitly sets nulled=false, so we never null CUSTOM types
+    return false
   end
 
   error(("Unexpected state! %s, %s, %s"):format(rev, status, sym))
