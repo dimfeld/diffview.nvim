@@ -16,15 +16,15 @@ references:
 planGeneratedAt: 2026-01-16T02:05:48.392Z
 promptsGeneratedAt: 2026-01-16T02:05:48.392Z
 createdAt: 2026-01-15T00:26:26.637Z
-updatedAt: 2026-01-16T02:07:24.541Z
+updatedAt: 2026-01-16T02:18:12.516Z
 tasks:
   - title: Extend ReviewEntry to store commit hash
-    done: false
+    done: true
     description: Add commit_hash field to ReviewEntry in review_store.lua. Update
       set_file_reviewed to accept and store commit_hash. Field should be
       optional for backward compatibility with existing review state files.
   - title: Update mark_file_reviewed to store commit hash
-    done: false
+    done: true
     description: Modify mark_file_reviewed in review.lua to get current HEAD commit
       hash using adapter:head_rev() and pass it to set_file_reviewed. Also
       update mark_all_reviewed.
@@ -103,6 +103,31 @@ tasks:
     description: Update doc/diffview.txt with new keybindings and actions. Update
       USAGE.md with section explaining filter and since-review mode features.
       Add notes about commit availability after force-push.
+changedFiles:
+  - .rmfilter/config/rmplan.yml
+  - AGENTS.md
+  - CLAUDE.md
+  - README.md
+  - USAGE.md
+  - doc/diffview.txt
+  - doc/diffview_defaults.txt
+  - lua/diffview/actions.lua
+  - lua/diffview/config.lua
+  - lua/diffview/hl.lua
+  - lua/diffview/init.lua
+  - lua/diffview/review.lua
+  - lua/diffview/review_store.lua
+  - lua/diffview/scene/views/diff/diff_view.lua
+  - lua/diffview/scene/views/diff/file_panel.lua
+  - lua/diffview/scene/views/diff/listeners.lua
+  - lua/diffview/scene/views/diff/render.lua
+  - lua/diffview/tests/functional/git_adapter_spec.lua
+  - lua/diffview/tests/functional/render_review_indicator_spec.lua
+  - lua/diffview/tests/functional/review_actions_spec.lua
+  - lua/diffview/tests/functional/review_api_spec.lua
+  - lua/diffview/tests/functional/review_navigation_spec.lua
+  - lua/diffview/tests/functional/review_store_spec.lua
+  - lua/diffview/vcs/adapters/git/init.lua
 tags: []
 ---
 
@@ -814,3 +839,33 @@ Add section explaining:
 3. **Since-review as mode**: Allows user to compare full diff vs incremental changes
 4. **Graceful degradation**: Falls back to full diff when commit unavailable
 5. **Consistent UX**: Follows existing toggle patterns in the codebase
+
+## Current Progress
+### Current State
+- Data model extended to store commit_hash when marking files reviewed
+- Foundation in place for since-review diff mode (Tasks 1-2 complete)
+
+### Completed (So Far)
+- Task 1: Added `commit_hash` optional field to ReviewEntry in review_store.lua
+- Task 2: Updated mark_file_reviewed and mark_all_reviewed in review.lua to capture HEAD commit hash via adapter:head_rev()
+- Event payloads (review_file_marked) now include commit_hash
+- Added 9 new tests covering commit_hash storage, backward compatibility, and edge cases
+
+### Remaining
+- Tasks 3-8: File panel filtering by review status
+- Tasks 9-13: Since-review diff mode implementation
+- Tasks 14-16: Additional tests and documentation
+
+### Next Iteration Guidance
+- Tasks 3-8 form the file panel filtering feature set (recommended next batch)
+- Tasks 3-4 add the filter state and action/keybinding
+- Tasks 5-7 implement the actual filtering logic and UI
+- Task 8 handles edge cases
+
+### Decisions / Changes
+- commit_hash is optional in ReviewEntry for backward compatibility with existing saved state
+- head_rev() returns a GitRev object; we extract .commit field for the hash
+- nil commit_hash is handled gracefully throughout
+
+### Risks / Blockers
+- None
