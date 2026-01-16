@@ -330,4 +330,194 @@ describe("diffview.vcs.adapters.git", function()
       eq(true, vim.tbl_contains(branches, "feature/x"))
     end)
   end)
+
+  describe("GitAdapter:get_current_branch() with JJ support", function()
+    local utils = require("diffview.utils")
+    local original_job
+    local original_is_dir
+
+    before_each(function()
+      original_job = utils.job
+      original_is_dir = utils.path.is_dir
+    end)
+
+    after_each(function()
+      utils.job = original_job
+      utils.path.is_dir = original_is_dir
+    end)
+
+    -- Helper to create a mock adapter for JJ tests
+    local function create_jj_mock_adapter(options)
+      options = options or {}
+
+      local mock = {
+        ctx = {
+          toplevel = options.toplevel or "/mock/repo",
+        },
+        exec_sync = function(self, args, opts)
+          -- Handle git rev-parse --abbrev-ref HEAD
+          if args[1] == "rev-parse" and args[2] == "--abbrev-ref" and args[3] == "HEAD" then
+            if options.abbrev_ref_fails then
+              return {}, options.abbrev_ref_exit_code or 128
+            end
+            return { options.abbrev_ref_result or "main" }, 0
+          end
+
+          -- Handle git rev-parse --short HEAD
+          if args[1] == "rev-parse" and args[2] == "--short" and args[3] == "HEAD" then
+            if options.short_fails then
+              return {}, options.short_exit_code or 128
+            end
+            return { options.short_result or "abc1234" }, 0
+          end
+
+          return {}, 1
+        end,
+      }
+
+      setmetatable(mock, { __index = GitAdapter })
+      return mock
+    end
+
+    it("uses JJ command when .jj directory exists", function()
+      -- Mock is_dir to return true for .jj
+      utils.path.is_dir = function(self, path)
+        return path:match("%.jj$") ~= nil
+      end
+
+      -- Mock utils.job to return JJ output
+      utils.job = function(cmd, opts)
+        if cmd[1] == "jj" then
+          return { "feature-branch" }, 0, {}
+        end
+        return original_job(cmd, opts)
+      end
+
+      local adapter = create_jj_mock_adapter({
+        abbrev_ref_result = "git-branch",  -- This should NOT be used
+      })
+
+      local branch = adapter:get_current_branch()
+      eq("feature-branch", branch)
+    end)
+
+    it("removes asterisks from JJ bookmark output", function()
+      utils.path.is_dir = function(self, path)
+        return path:match("%.jj$") ~= nil
+      end
+
+      utils.job = function(cmd, opts)
+        if cmd[1] == "jj" then
+          return { "my-bookmark*" }, 0, {}  -- JJ marks current with asterisk
+        end
+        return original_job(cmd, opts)
+      end
+
+      local adapter = create_jj_mock_adapter()
+
+      local branch = adapter:get_current_branch()
+      eq("my-bookmark", branch)
+    end)
+
+    it("handles whitespace in JJ output", function()
+      utils.path.is_dir = function(self, path)
+        return path:match("%.jj$") ~= nil
+      end
+
+      utils.job = function(cmd, opts)
+        if cmd[1] == "jj" then
+          return { "  spaced-branch*  \n" }, 0, {}
+        end
+        return original_job(cmd, opts)
+      end
+
+      local adapter = create_jj_mock_adapter()
+
+      local branch = adapter:get_current_branch()
+      eq("spaced-branch", branch)
+    end)
+
+    it("falls back to Git when JJ command fails", function()
+      utils.path.is_dir = function(self, path)
+        return path:match("%.jj$") ~= nil
+      end
+
+      utils.job = function(cmd, opts)
+        if cmd[1] == "jj" then
+          return {}, 1, { "jj: command not found" }  -- JJ not installed
+        end
+        return original_job(cmd, opts)
+      end
+
+      local adapter = create_jj_mock_adapter({
+        abbrev_ref_result = "git-fallback-branch",
+      })
+
+      local branch = adapter:get_current_branch()
+      eq("git-fallback-branch", branch)
+    end)
+
+    it("falls back to Git when JJ returns empty output", function()
+      utils.path.is_dir = function(self, path)
+        return path:match("%.jj$") ~= nil
+      end
+
+      utils.job = function(cmd, opts)
+        if cmd[1] == "jj" then
+          return {}, 0, {}  -- Success but empty (no bookmarks)
+        end
+        return original_job(cmd, opts)
+      end
+
+      local adapter = create_jj_mock_adapter({
+        abbrev_ref_result = "git-no-bookmark-branch",
+      })
+
+      local branch = adapter:get_current_branch()
+      eq("git-no-bookmark-branch", branch)
+    end)
+
+    it("falls back to Git when JJ output is only whitespace/asterisks", function()
+      utils.path.is_dir = function(self, path)
+        return path:match("%.jj$") ~= nil
+      end
+
+      utils.job = function(cmd, opts)
+        if cmd[1] == "jj" then
+          return { "  *  " }, 0, {}  -- Only whitespace and asterisks
+        end
+        return original_job(cmd, opts)
+      end
+
+      local adapter = create_jj_mock_adapter({
+        abbrev_ref_result = "git-empty-jj-branch",
+      })
+
+      local branch = adapter:get_current_branch()
+      eq("git-empty-jj-branch", branch)
+    end)
+
+    it("uses Git behavior when .jj directory does not exist", function()
+      utils.path.is_dir = function(self, path)
+        return false  -- No .jj directory
+      end
+
+      -- JJ should NOT be called
+      local jj_called = false
+      utils.job = function(cmd, opts)
+        if cmd[1] == "jj" then
+          jj_called = true
+        end
+        return original_job(cmd, opts)
+      end
+
+      local adapter = create_jj_mock_adapter({
+        abbrev_ref_result = "regular-git-branch",
+      })
+
+      local branch = adapter:get_current_branch()
+      eq("regular-git-branch", branch)
+      eq(false, jj_called)
+    end)
+  end)
 end)

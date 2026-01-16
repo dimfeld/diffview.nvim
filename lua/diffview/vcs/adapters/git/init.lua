@@ -1309,8 +1309,33 @@ function GitAdapter:head_rev()
 end
 
 ---Get the current branch name, or a detached HEAD identifier if not on a branch.
+---For JJ repositories (detected by .jj directory), uses JJ to find the current bookmark.
 ---@return string branch The branch name, or "detached-<short-sha>" if in detached HEAD state
 function GitAdapter:get_current_branch()
+  -- Check if this is a JJ repository by looking for .jj directory
+  local jj_dir = pl:join(self.ctx.toplevel, ".jj")
+  if pl:is_dir(jj_dir) then
+    -- Use JJ to get the current bookmark
+    local jj_out, jj_code = utils.job({
+      "jj",
+      "log",
+      "-r", "latest(heads(ancestors(@) & bookmarks()), 1)",
+      "--limit", "1",
+      "--no-graph",
+      "--ignore-working-copy",
+      "-T", "local_bookmarks",
+    }, { cwd = self.ctx.toplevel, silent = true })
+
+    if jj_code == 0 and jj_out and #jj_out > 0 then
+      -- Remove asterisks and trim whitespace
+      local branch = vim.trim(jj_out[1]):gsub("%*", "")
+      if branch ~= "" then
+        return branch
+      end
+    end
+    -- Fall through to Git behavior if JJ command fails or returns empty
+  end
+
   local out, code = self:exec_sync({
     "rev-parse",
     "--abbrev-ref",
