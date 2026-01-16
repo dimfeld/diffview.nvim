@@ -7,6 +7,48 @@ local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
 local pl = lazy.access(utils, "path") ---@type PathLib
 
+---Count pending review files (unreviewed or changed) vs total files.
+---@param panel FilePanel
+---@param view DiffView|nil
+---@return integer pending_count, integer total_count
+local function count_pending_files(panel, view)
+  if not view or not view.review_state then
+    return 0, 0
+  end
+
+  local pending = 0
+  local total = 0
+
+  for _, file in panel.files:iter() do
+    total = total + 1
+    local status = review.get_file_status(view, file)
+    if status == "unreviewed" or status == "changed" then
+      pending = pending + 1
+    end
+  end
+
+  return pending, total
+end
+
+---Count visible files in a section when filter is active.
+---@param files table[] The file list for the section
+---@param view DiffView|nil
+---@return integer visible_count
+local function count_visible_section_files(files, view)
+  if not view or not view.review_filter_enabled then
+    return #files
+  end
+
+  local count = 0
+  for _, file in ipairs(files) do
+    local status = review.get_file_status(view, file)
+    if status == "unreviewed" or status == "changed" then
+      count = count + 1
+    end
+  end
+  return count
+end
+
 ---@param comp  RenderComponent
 ---@param show_path boolean
 ---@param depth integer|nil
@@ -169,13 +211,30 @@ return function(panel)
   if conf.show_help_hints and panel.help_mapping then
     comp:add_text("Help: ", "DiffviewFilePanelPath")
     comp:add_line(panel.help_mapping, "DiffviewFilePanelCounter")
-    comp:add_line()
+  end
+
+  -- Show filter indicator when review filter is active
+  if view and view.review_filter_enabled then
+    local pending, total = count_pending_files(panel, view)
+    comp:add_text("[Pending: ", "DiffviewFilePanelPath")
+    comp:add_text(string.format("%d/%d", pending, total), "DiffviewFilePanelCounter")
+    comp:add_text("]", "DiffviewFilePanelPath")
+    comp:ln()
+  end
+
+  if conf.show_help_hints and panel.help_mapping then
+    comp:ln()
   end
 
   if #panel.files.conflicting > 0 then
     comp = panel.components.conflicting.title.comp
     comp:add_text("Conflicts ", "DiffviewFilePanelTitle")
-    comp:add_text("(" .. #panel.files.conflicting .. ")", "DiffviewFilePanelCounter")
+    if view and view.review_filter_enabled then
+      local visible = count_visible_section_files(panel.files.conflicting, view)
+      comp:add_text(string.format("(%d/%d)", visible, #panel.files.conflicting), "DiffviewFilePanelCounter")
+    else
+      comp:add_text("(" .. #panel.files.conflicting .. ")", "DiffviewFilePanelCounter")
+    end
     comp:ln()
 
     render_files(panel.listing_style, panel.components.conflicting.files.comp, view)
@@ -189,7 +248,12 @@ return function(panel)
   if #panel.files.working > 0 or not has_other_files then
     comp = panel.components.working.title.comp
     comp:add_text("Changes ", "DiffviewFilePanelTitle")
-    comp:add_text("(" .. #panel.files.working .. ")", "DiffviewFilePanelCounter")
+    if view and view.review_filter_enabled then
+      local visible = count_visible_section_files(panel.files.working, view)
+      comp:add_text(string.format("(%d/%d)", visible, #panel.files.working), "DiffviewFilePanelCounter")
+    else
+      comp:add_text("(" .. #panel.files.working .. ")", "DiffviewFilePanelCounter")
+    end
     comp:ln()
 
     render_files(panel.listing_style, panel.components.working.files.comp, view)
@@ -199,7 +263,12 @@ return function(panel)
   if #panel.files.staged > 0 then
     comp = panel.components.staged.title.comp
     comp:add_text("Staged changes ", "DiffviewFilePanelTitle")
-    comp:add_text("(" .. #panel.files.staged .. ")", "DiffviewFilePanelCounter")
+    if view and view.review_filter_enabled then
+      local visible = count_visible_section_files(panel.files.staged, view)
+      comp:add_text(string.format("(%d/%d)", visible, #panel.files.staged), "DiffviewFilePanelCounter")
+    else
+      comp:add_text("(" .. #panel.files.staged .. ")", "DiffviewFilePanelCounter")
+    end
     comp:ln()
 
     render_files(panel.listing_style, panel.components.staged.files.comp, view)

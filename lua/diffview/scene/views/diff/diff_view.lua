@@ -559,6 +559,7 @@ function DiffView:init_review_event_listeners()
 
   local function refresh_panel()
     if self.panel:is_open() then
+      self.panel:update_components()
       self.panel:render()
       self.panel:redraw()
     end
@@ -567,6 +568,18 @@ function DiffView:init_review_event_listeners()
   self.review_event_callbacks.file_marked = function(_, payload)
     if payload.view == self then
       refresh_panel()
+
+      -- Auto-disable filter when all files are marked reviewed
+      if self.review_filter_enabled then
+        local visible_files = self.panel:ordered_file_list()
+        if #visible_files == 0 then
+          self.review_filter_enabled = false
+          self.panel:update_components()
+          self.panel:render()
+          self.panel:redraw()
+          api.nvim_echo({{ "All files reviewed - filter disabled" }}, false, {})
+        end
+      end
     end
   end
 
@@ -749,28 +762,38 @@ function DiffView:toggle_review_filter()
   self.panel:render()
   self.panel:redraw()
 
-  -- If current file is now filtered out, move to first visible file
-  if self.review_filter_enabled and self.panel.cur_file then
-    local visible_files = self.panel:ordered_file_list()
-    local cur_visible = false
-    for _, file in ipairs(visible_files) do
-      if file == self.panel.cur_file then
-        cur_visible = true
-        break
-      end
-    end
-
-    if not cur_visible and #visible_files > 0 then
-      self.panel:set_cur_file(visible_files[1])
-      self.panel:highlight_file(visible_files[1])
-      self:_set_file(visible_files[1])
-    end
-  end
-
-  -- Show filter state message
+  -- Check for edge cases when enabling the filter
   if self.review_filter_enabled then
     local visible_files = self.panel:ordered_file_list()
     local total_files = self.files:len()
+
+    -- If no files pending review, auto-disable the filter
+    if #visible_files == 0 then
+      self.review_filter_enabled = false
+      self.panel:update_components()
+      self.panel:render()
+      self.panel:redraw()
+      api.nvim_echo({{ "No files pending review - filter disabled" }}, false, {})
+      return
+    end
+
+    -- If current file is now filtered out, move to first visible file
+    if self.panel.cur_file then
+      local cur_visible = false
+      for _, file in ipairs(visible_files) do
+        if file == self.panel.cur_file then
+          cur_visible = true
+          break
+        end
+      end
+
+      if not cur_visible then
+        self.panel:set_cur_file(visible_files[1])
+        self.panel:highlight_file(visible_files[1])
+        self:_set_file(visible_files[1])
+      end
+    end
+
     api.nvim_echo({{ ("Review filter ON: showing %d/%d files pending review"):format(#visible_files, total_files) }}, false, {})
   else
     api.nvim_echo({{ "Review filter OFF: showing all files" }}, false, {})
