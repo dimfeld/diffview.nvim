@@ -16,29 +16,29 @@ references:
 planGeneratedAt: 2026-01-16T10:13:56.188Z
 promptsGeneratedAt: 2026-01-16T10:13:56.188Z
 createdAt: 2026-01-15T01:45:14.898Z
-updatedAt: 2026-01-16T10:15:33.401Z
+updatedAt: 2026-01-16T10:24:48.310Z
 tasks:
   - title: Add branch listing methods to ReviewStore
-    done: false
+    done: true
     description: Add unsanitize_branch() helper and get_stored_branches(repo_id)
       method to ReviewStore in lua/diffview/review_store.lua. The
       unsanitize_branch function converts sanitized filenames back to possible
       branch names. The get_stored_branches method scans the repo directory and
       returns stored branch info.
   - title: Add get_all_branches method to GitAdapter
-    done: false
+    done: true
     description: Add get_all_branches() method to
       lua/diffview/vcs/adapters/git/init.lua that returns all local and
       remote-tracking branch names. Uses git for-each-ref with refs/heads/ and
       refs/remotes/. Also extracts short forms from remote branches (e.g.,
       origin/main -> main).
   - title: Add age timestamp extraction to ReviewStore
-    done: false
+    done: true
     description: Add get_latest_review_timestamp(file_path) method to ReviewStore
       that reads a JSON file and returns the most recent reviewed_at timestamp
       from the files entries. Returns nil on error or if no timestamps found.
   - title: Add cleanup_stale_branches method to ReviewStore
-    done: false
+    done: true
     description: Add cleanup_stale_branches(adapter, opts) method to ReviewStore
       that compares stored branches against git branches and deletes stale ones.
       Supports dry_run mode and max_age_days parameter. Cleans up detached HEAD
@@ -81,17 +81,17 @@ tasks:
       event in lua/diffview/init.lua that fires DiffviewReviewCleanupCompleted
       user autocommand.
   - title: Write tests for branch listing methods
-    done: false
+    done: true
     description: "Create lua/diffview/tests/functional/review_cleanup_spec.lua with
       tests for get_stored_branches(): empty repo dir, correct branches,
       sanitized names with slashes, skips non-JSON files."
   - title: Write tests for timestamp extraction
-    done: false
+    done: true
     description: "Add tests for get_latest_review_timestamp(): returns nil for
       non-existent file, nil for malformed JSON, correct timestamp for single
       entry, most recent for multiple entries."
   - title: Write tests for cleanup_stale_branches
-    done: false
+    done: true
     description: "Add tests for cleanup_stale_branches(): error cases, dry run mode,
       actual deletion, preserving existing branches (local and remote),
       double-underscore ambiguity, detached HEAD age-based cleanup, max_age_days
@@ -101,6 +101,36 @@ tasks:
     description: "Add tests for review.cleanup_stale_reviews() and
       review.get_cleanup_preview(): disabled review, no view, event emission,
       correct file deletion."
+changedFiles:
+  - .rmfilter/config/rmplan.yml
+  - AGENTS.md
+  - CLAUDE.md
+  - README.md
+  - USAGE.md
+  - doc/diffview.txt
+  - doc/diffview_defaults.txt
+  - lua/diffview/actions.lua
+  - lua/diffview/config.lua
+  - lua/diffview/hl.lua
+  - lua/diffview/init.lua
+  - lua/diffview/review.lua
+  - lua/diffview/review_store.lua
+  - lua/diffview/scene/views/diff/diff_view.lua
+  - lua/diffview/scene/views/diff/file_panel.lua
+  - lua/diffview/scene/views/diff/listeners.lua
+  - lua/diffview/scene/views/diff/render.lua
+  - lua/diffview/tests/functional/git_adapter_spec.lua
+  - lua/diffview/tests/functional/render_review_indicator_spec.lua
+  - lua/diffview/tests/functional/review_actions_spec.lua
+  - lua/diffview/tests/functional/review_api_spec.lua
+  - lua/diffview/tests/functional/review_cleanup_spec.lua
+  - lua/diffview/tests/functional/review_clear_spec.lua
+  - lua/diffview/tests/functional/review_filter_spec.lua
+  - lua/diffview/tests/functional/review_navigation_spec.lua
+  - lua/diffview/tests/functional/review_store_spec.lua
+  - lua/diffview/tests/functional/since_review_diff_spec.lua
+  - lua/diffview/ui/models/file_tree/file_tree.lua
+  - lua/diffview/vcs/adapters/git/init.lua
 tags: []
 ---
 
@@ -830,3 +860,43 @@ Create comprehensive tests:
 6. Verify the JSON files for deleted branches are removed
 7. Verify JSON files for existing branches are preserved
 8. Test auto-cleanup by enabling `review.auto_cleanup` and reopening diffview
+
+## Current Progress
+### Current State
+- Core cleanup infrastructure implemented and tested
+- ReviewStore methods for branch listing, timestamp extraction, and cleanup logic complete
+- GitAdapter method for listing all branches complete
+
+### Completed (So Far)
+- Task 1: unsanitize_branch() helper and get_stored_branches(repo_id) in ReviewStore
+- Task 2: get_all_branches() method in GitAdapter (local + remote branches, with short form extraction)
+- Task 3: get_latest_review_timestamp(file_path) in ReviewStore
+- Task 4: cleanup_stale_branches(adapter, opts) in ReviewStore with dry_run and max_age_days support
+- Task 12: Tests for branch listing methods (37 tests in review_cleanup_spec.lua)
+- Task 13: Tests for timestamp extraction
+- Task 14: Tests for cleanup_stale_branches
+- Additional: Unit tests for GitAdapter:get_all_branches() added to git_adapter_spec.lua
+
+### Remaining
+- Task 5: Public cleanup API in review.lua (get_cleanup_preview, cleanup_stale_reviews)
+- Task 6: Configuration options (auto_cleanup, cleanup_age_days) in config.lua
+- Task 7: review_cleanup action in actions.lua
+- Task 8: review_cleanup listener in listeners.lua
+- Task 9: DiffviewReviewCleanup command in plugin/diffview.lua
+- Task 10: Auto-cleanup on DiffView open in diff_view.lua
+- Task 11: Cleanup event emitter in init.lua
+- Task 15: Tests for public cleanup API
+
+### Next Iteration Guidance
+- Start with Task 5 (public API) and Task 6 (config options) as they are foundational for the remaining tasks
+- Then implement Tasks 7-9 (action, listener, command) together as they form the manual cleanup workflow
+- Tasks 10-11 (auto-cleanup, event emitter) can be done last
+- Task 15 should follow Task 5
+
+### Decisions / Changes
+- Double-underscore ambiguity handled by checking both possible branch names (conservative approach)
+- Age-based cleanup only applies to stale branches AND detached HEAD files
+- Files with undeterminable timestamps are skipped (conservative behavior)
+
+### Risks / Blockers
+- None
