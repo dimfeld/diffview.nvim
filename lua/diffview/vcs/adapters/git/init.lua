@@ -1369,24 +1369,41 @@ end
 ---Used for cleanup of stale review state
 ---@return string[]|nil branches List of branch names, or nil on error
 function GitAdapter:get_all_branches()
-  -- Get both local and remote branches
-  local out, code = self:exec_sync({
-    "for-each-ref",
-    "--format=%(refname:short)",
-    "refs/heads/",
-    "refs/remotes/",
-  }, { cwd = self.ctx.toplevel, silent = true })
-
-  if code ~= 0 then
-    return nil
-  end
-
-  -- Filter out empty lines and normalize remote branch names
-  -- e.g., "origin/main" -> also add "main" as a valid name
   local branches = {}
   local seen = {}
 
-  for _, line in ipairs(out or {}) do
+  -- Get local branches first (refs/heads/)
+  -- Don't extract short forms from local branches (e.g., feature/foo should not add "foo")
+  local local_out, local_code = self:exec_sync({
+    "for-each-ref",
+    "--format=%(refname:short)",
+    "refs/heads/",
+  }, { cwd = self.ctx.toplevel, silent = true })
+
+  if local_code ~= 0 then
+    return nil
+  end
+
+  for _, line in ipairs(local_out or {}) do
+    if line ~= "" and not seen[line] then
+      seen[line] = true
+      table.insert(branches, line)
+    end
+  end
+
+  -- Get remote-tracking branches (refs/remotes/)
+  -- For remote branches, also add the short form (e.g., "origin/main" -> also add "main")
+  local remote_out, remote_code = self:exec_sync({
+    "for-each-ref",
+    "--format=%(refname:short)",
+    "refs/remotes/",
+  }, { cwd = self.ctx.toplevel, silent = true })
+
+  if remote_code ~= 0 then
+    return nil
+  end
+
+  for _, line in ipairs(remote_out or {}) do
     if line ~= "" and not seen[line] then
       seen[line] = true
       table.insert(branches, line)

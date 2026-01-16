@@ -143,6 +143,7 @@ describe("diffview.vcs.adapters.git", function()
 
   describe("GitAdapter:get_all_branches()", function()
     -- Helper to create a mock adapter for get_all_branches tests
+    -- Now supports separate outputs for local and remote branches
     local function create_mock_adapter(options)
       options = options or {}
 
@@ -151,13 +152,22 @@ describe("diffview.vcs.adapters.git", function()
           toplevel = options.toplevel or "/mock/repo",
         },
         exec_sync = function(self, args, opts)
-          -- Handle git for-each-ref command
-          if args[1] == "for-each-ref" and args[2] == "--format=%(refname:short)" then
-            if options.command_fails then
-              return {}, options.exit_code or 128
+          -- Handle git for-each-ref command for local branches
+          if args[1] == "for-each-ref" and args[2] == "--format=%(refname:short)" and args[3] == "refs/heads/" then
+            if options.local_fails then
+              return {}, options.local_exit_code or 128
             end
-            return options.output or {}, 0
+            return options.local_output or {}, 0
           end
+
+          -- Handle git for-each-ref command for remote branches
+          if args[1] == "for-each-ref" and args[2] == "--format=%(refname:short)" and args[3] == "refs/remotes/" then
+            if options.remote_fails then
+              return {}, options.remote_exit_code or 128
+            end
+            return options.remote_output or {}, 0
+          end
+
           return {}, 1
         end,
       }
@@ -168,7 +178,8 @@ describe("diffview.vcs.adapters.git", function()
 
     it("returns branch names for local branches", function()
       local adapter = create_mock_adapter({
-        output = { "main", "develop", "feature/login" },
+        local_output = { "main", "develop", "feature/login" },
+        remote_output = {},
       })
 
       local branches = adapter:get_all_branches()
@@ -180,7 +191,8 @@ describe("diffview.vcs.adapters.git", function()
 
     it("filters out empty lines in output", function()
       local adapter = create_mock_adapter({
-        output = { "main", "", "develop", "", "" },
+        local_output = { "main", "", "develop", "", "" },
+        remote_output = {},
       })
 
       local branches = adapter:get_all_branches()
@@ -191,10 +203,21 @@ describe("diffview.vcs.adapters.git", function()
       eq(true, vim.tbl_contains(branches, "develop"))
     end)
 
-    it("returns nil when git command fails", function()
+    it("returns nil when local branch command fails", function()
       local adapter = create_mock_adapter({
-        command_fails = true,
-        exit_code = 128,
+        local_fails = true,
+        local_exit_code = 128,
+      })
+
+      local branches = adapter:get_all_branches()
+      eq(nil, branches)
+    end)
+
+    it("returns nil when remote branch command fails", function()
+      local adapter = create_mock_adapter({
+        local_output = { "main" },
+        remote_fails = true,
+        remote_exit_code = 128,
       })
 
       local branches = adapter:get_all_branches()
@@ -203,7 +226,8 @@ describe("diffview.vcs.adapters.git", function()
 
     it("extracts short forms from remote branches", function()
       local adapter = create_mock_adapter({
-        output = { "main", "origin/main", "origin/feature/test" },
+        local_output = { "main" },
+        remote_output = { "origin/main", "origin/feature/test" },
       })
 
       local branches = adapter:get_all_branches()
@@ -215,9 +239,43 @@ describe("diffview.vcs.adapters.git", function()
       eq(true, vim.tbl_contains(branches, "feature/test"))
     end)
 
+    it("does NOT extract short forms from local branches with slashes", function()
+      local adapter = create_mock_adapter({
+        local_output = { "feature/foo", "bugfix/bar/baz" },
+        remote_output = {},
+      })
+
+      local branches = adapter:get_all_branches()
+      neq(nil, branches)
+      -- Local branches should appear as-is
+      eq(true, vim.tbl_contains(branches, "feature/foo"))
+      eq(true, vim.tbl_contains(branches, "bugfix/bar/baz"))
+      -- But their short forms should NOT be extracted
+      eq(false, vim.tbl_contains(branches, "foo"))
+      eq(false, vim.tbl_contains(branches, "bar/baz"))
+    end)
+
+    it("only extracts short forms from remote branches, not local", function()
+      -- This is the key test for the bug fix
+      local adapter = create_mock_adapter({
+        local_output = { "feature/foo" },  -- Local branch with slash
+        remote_output = { "origin/feature/bar" },  -- Remote branch with slash
+      })
+
+      local branches = adapter:get_all_branches()
+      neq(nil, branches)
+      -- Local branch should NOT have short form extracted
+      eq(true, vim.tbl_contains(branches, "feature/foo"))
+      eq(false, vim.tbl_contains(branches, "foo"))
+      -- Remote branch SHOULD have short form extracted
+      eq(true, vim.tbl_contains(branches, "origin/feature/bar"))
+      eq(true, vim.tbl_contains(branches, "feature/bar"))
+    end)
+
     it("deduplicates branches that appear both locally and remotely", function()
       local adapter = create_mock_adapter({
-        output = { "main", "origin/main" },
+        local_output = { "main" },
+        remote_output = { "origin/main" },
       })
 
       local branches = adapter:get_all_branches()
@@ -234,7 +292,8 @@ describe("diffview.vcs.adapters.git", function()
 
     it("handles empty output gracefully", function()
       local adapter = create_mock_adapter({
-        output = {},
+        local_output = {},
+        remote_output = {},
       })
 
       local branches = adapter:get_all_branches()
@@ -259,7 +318,8 @@ describe("diffview.vcs.adapters.git", function()
 
     it("handles multiple remote origins", function()
       local adapter = create_mock_adapter({
-        output = { "main", "origin/main", "upstream/main", "origin/feature/x" },
+        local_output = { "main" },
+        remote_output = { "origin/main", "upstream/main", "origin/feature/x" },
       })
 
       local branches = adapter:get_all_branches()
