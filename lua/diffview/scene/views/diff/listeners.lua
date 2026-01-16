@@ -5,11 +5,13 @@ local EventName = lazy.access("diffview.events", "EventName") ---@type EventName
 local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|LazyModule
 local actions = lazy.require("diffview.actions") ---@module "diffview.actions"
 local review = lazy.require("diffview.review") ---@module "diffview.review"
+local review_store = lazy.require("diffview.review_store") ---@module "diffview.review_store"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 local vcs_utils = lazy.require("diffview.vcs.utils") ---@module "diffview.vcs.utils"
 
 local api = vim.api
 local await = async.await
+local uv = vim.loop
 
 ---@param view DiffView
 return function(view)
@@ -342,6 +344,66 @@ return function(view)
       local file = view:infer_cur_file()
       if not file then return end
       review.clear_file_review(view, file)
+    end,
+    review_clear_all = function()
+      if not view.review_state then
+        utils.warn("No review state available for this view")
+        return
+      end
+
+      local file_count = vim.tbl_count(view.review_state.files)
+      if file_count == 0 then
+        utils.info("No files are currently marked as reviewed")
+        return
+      end
+
+      vim.ui.select({ "Yes", "No" }, {
+        prompt = ("Clear review state for %d file(s) on branch '%s'?"):format(
+          file_count,
+          view.review_state.branch
+        ),
+      }, function(choice)
+        if choice == "Yes" then
+          review.clear_all_reviews(view)
+        end
+      end)
+    end,
+    review_clear_repo = function()
+      local store = review_store.get_store()
+      local repo_id = store:get_repo_id(view.adapter)
+      if not repo_id then
+        utils.warn("Could not determine repository ID")
+        return
+      end
+
+      -- Count branches by scanning the repo directory
+      local cache_dir = store:get_cache_dir()
+      local repo_dir = utils.path:join(cache_dir, repo_id)
+      local branch_count = 0
+      local stat = utils.path:stat(repo_dir)
+      if stat and stat.type == "directory" then
+        local handle = uv.fs_scandir(repo_dir)
+        if handle then
+          while true do
+            local name = uv.fs_scandir_next(handle)
+            if not name then break end
+            if name:match("%.json$") then branch_count = branch_count + 1 end
+          end
+        end
+      end
+
+      if branch_count == 0 then
+        utils.info("No review state exists for this repository")
+        return
+      end
+
+      vim.ui.select({ "Yes", "No" }, {
+        prompt = ("Clear review state for %d branch(es) in this repository?"):format(branch_count),
+      }, function(choice)
+        if choice == "Yes" then
+          review.clear_repo_reviews(view)
+        end
+      end)
     end,
     review_next_pending = function()
       view:next_pending_review_file()

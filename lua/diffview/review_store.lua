@@ -301,6 +301,38 @@ ReviewStore.save_state = async.void(function(self, state)
   state.dirty = false
 end)
 
+---Clear all review state for a repository (all branches)
+---@param repo_id string The repository ID
+---@return integer deleted_count Number of branch files deleted
+function ReviewStore:clear_repo_state(repo_id)
+  local cache_dir = self:get_cache_dir()
+  local repo_dir = utils.path:join(cache_dir, repo_id)
+
+  local stat = utils.path:stat(repo_dir)
+  if not stat or stat.type ~= "directory" then
+    return 0
+  end
+
+  local deleted_count = 0
+  local handle = uv.fs_scandir(repo_dir)
+  if handle then
+    while true do
+      local name, ftype = uv.fs_scandir_next(handle)
+      if not name then break end
+      if ftype == "file" and name:match("%.json$") then
+        local file_path = utils.path:join(repo_dir, name)
+        local ok = pcall(uv.fs_unlink, file_path)
+        if ok then deleted_count = deleted_count + 1 end
+      end
+    end
+  end
+
+  -- Optionally remove the empty directory
+  pcall(uv.fs_rmdir, repo_dir)
+
+  return deleted_count
+end
+
 ---Load review state synchronously (blocking)
 ---@param adapter VCSAdapter The VCS adapter
 ---@param branch string The branch name

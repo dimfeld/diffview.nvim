@@ -172,6 +172,44 @@ function M.clear_all_reviews(view)
   return true
 end
 
+---Clear all reviews for the repository (all branches)
+---@param view DiffView
+---@return integer deleted_count Number of branch files deleted, or 0 on error
+function M.clear_repo_reviews(view)
+  if not is_review_enabled() then
+    return 0
+  end
+
+  if not view or not view.adapter then
+    utils.warn("No adapter available for this view")
+    return 0
+  end
+
+  local store = review_store.get_store()
+  local repo_id = store:get_repo_id(view.adapter)
+  if not repo_id then
+    utils.warn("Could not determine repository ID")
+    return 0
+  end
+
+  local deleted_count = store:clear_repo_state(repo_id)
+
+  -- Clear the in-memory state if it exists
+  if view.review_state then
+    view.review_state.files = {}
+    view.review_state.dirty = false
+  end
+
+  -- Emit event for UI updates
+  DiffviewGlobal.emitter:emit("review_repo_cleared", {
+    view = view,
+    repo_id = repo_id,
+    deleted_count = deleted_count,
+  })
+
+  return deleted_count
+end
+
 ---Get the review status of a file
 ---@param view DiffView
 ---@param file_entry FileEntry
