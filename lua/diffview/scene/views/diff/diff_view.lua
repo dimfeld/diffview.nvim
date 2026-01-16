@@ -230,17 +230,18 @@ function DiffView:close()
   end
 end
 
----Create a modified FileEntry for since-review mode that uses the review commit as the left revision.
+---Create a modified FileEntry for since-review mode that uses the stored blob hash for the left side.
 ---@param self DiffView
 ---@param file FileEntry The original file entry
----@param review_entry ReviewEntry The review entry with commit_hash
+---@param review_entry ReviewEntry The review entry with blob_hash
 ---@return FileEntry modified_entry A new FileEntry with since-review revisions
 ---@private
 DiffView._create_since_review_entry = function(self, file, review_entry)
-  -- Create a new Rev for the left side using the review commit
-  local review_rev = GitRev(RevType.COMMIT, review_entry.commit_hash)
+  -- Create a custom Rev for the left side - we use CUSTOM type since we'll provide get_data
+  -- The revision string is the blob_hash for reference/display purposes
+  local review_rev = GitRev(RevType.CUSTOM, review_entry.blob_hash)
 
-  -- Create the new revisions map (left = review commit, right = same as original)
+  -- Create the new revisions map (left = review blob, right = same as original)
   local new_revs = {
     a = review_rev,
     b = file.revs.b, -- Keep the original right revision
@@ -248,7 +249,27 @@ DiffView._create_since_review_entry = function(self, file, review_entry)
     d = file.revs.d,
   }
 
-  -- Create a new FileEntry with the modified revisions
+  -- Create a get_data function that retrieves content via blob hash for the left side
+  local blob_hash = review_entry.blob_hash
+  local adapter = self.adapter
+  local get_data = function(kind, path, pos)
+    if pos == "left" then
+      -- Retrieve content directly from the blob hash
+      local out, code = adapter:exec_sync({
+        "show", blob_hash,
+      }, { cwd = adapter.ctx.toplevel, silent = true })
+
+      if code == 0 and out then
+        return out
+      end
+      -- Return empty on error (will show as empty file in diff)
+      return {}
+    end
+    -- For right side, return nil to use default behavior
+    return nil
+  end
+
+  -- Create a new FileEntry with the modified revisions and custom get_data
   local since_review_entry = FileEntry.with_layout(file.layout.class, {
     adapter = file.adapter,
     path = file.path,
@@ -258,7 +279,7 @@ DiffView._create_since_review_entry = function(self, file, review_entry)
     stats = file.stats,
     kind = file.kind,
     commit = file.commit,
-    get_data = nil, -- Use default data fetching
+    get_data = get_data,
     nulled = false,
   })
 
@@ -290,7 +311,7 @@ DiffView._set_file = async.void(function(self, file)
         entry_to_use = self:_create_since_review_entry(file, review_entry)
         using_since_review = true
         -- Show indicator that we're viewing since-review diff
-        api.nvim_echo({{ fmt("[Since review: %s]", review_entry.commit_hash:sub(1, 7)), "Comment" }}, false, {})
+        api.nvim_echo({{ "[Since review]", "Comment" }}, false, {})
       elseif err then
         -- Fall back to full diff and warn user
         utils.info(fmt("Since-review mode: %s - showing full diff", err))
@@ -903,6 +924,19 @@ function DiffView:verify_commit_exists(commit_hash)
   return code == 0
 end
 
+---Verify that a git blob exists (hasn't been garbage collected).
+---@param blob_hash string The blob hash to verify
+---@return boolean exists True if the blob exists
+function DiffView:verify_blob_exists(blob_hash)
+  if not blob_hash then
+    return false
+  end
+  local _, code = self.adapter:exec_sync({
+    "cat-file", "-e", blob_hash,
+  }, self.adapter.ctx.toplevel)
+  return code == 0
+end
+
 ---Toggle since-review diff mode.
 ---When enabled, files with "changed" status show only changes since the
 ---commit where they were last marked as reviewed.
@@ -937,7 +971,9 @@ function DiffView:toggle_since_review_mode()
   self.panel:redraw()
 end
 
----Get the review entry for a file if it exists and has commit_hash.
+---Get the review entry for a file if it exists and has blob_hash.
+---Uses blob_hash for content retrieval, which is more resilient than commit_hash
+---since blobs often survive rebases and amends.
 ---@param file_entry FileEntry
 ---@return ReviewEntry|nil review_entry The review entry if valid for since-review mode
 ---@return string|nil error_message Error message if since-review is not available
@@ -955,13 +991,13 @@ function DiffView:get_since_review_entry(file_entry)
     return nil, "File has not been reviewed"
   end
 
-  if not review_entry.commit_hash then
-    return nil, "Review was saved without commit information"
+  if not review_entry.blob_hash then
+    return nil, "Review was saved without blob information"
   end
 
-  -- Verify the commit still exists
-  if not self:verify_commit_exists(review_entry.commit_hash) then
-    return nil, "Reviewed commit no longer exists (may have been rebased)"
+  -- Verify the blob still exists (blobs are more resilient than commits)
+  if not self:verify_blob_exists(review_entry.blob_hash) then
+    return nil, "Reviewed file content no longer exists (may have been garbage collected)"
   end
 
   return review_entry, nil

@@ -68,13 +68,16 @@ describe("since-review diff mode", function()
         return opts.blob_hashes and opts.blob_hashes[path] or "hash_" .. path
       end,
       exec_sync = function(self, args, cwd)
-        -- Mock git cat-file -e for commit existence check
+        -- Mock git cat-file -e for commit/blob existence check
         if args[1] == "cat-file" and args[2] == "-e" then
-          local commit = args[3]
-          if opts.existing_commits and opts.existing_commits[commit] then
+          local object = args[3]
+          -- Check both commits and blobs
+          if opts.existing_commits and opts.existing_commits[object] then
             return {}, 0
-          elseif opts.existing_commits == nil then
-            -- Default: commit exists
+          elseif opts.existing_blobs and opts.existing_blobs[object] then
+            return {}, 0
+          elseif opts.existing_commits == nil and opts.existing_blobs == nil then
+            -- Default: object exists
             return {}, 0
           else
             return {}, 1
@@ -351,7 +354,7 @@ describe("since-review diff mode", function()
   end)
 
   describe("get_since_review_entry", function()
-    it("returns review entry when file has commit_hash and commit exists", function()
+    it("returns review entry when file has blob_hash and blob exists", function()
       local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
 
       local file = create_file_entry("src/file.lua")
@@ -366,12 +369,12 @@ describe("since-review diff mode", function()
           ["src/file.lua"] = review_entry,
         }),
         adapter = create_mock_adapter({
-          existing_commits = { ["abc123"] = true },
+          existing_blobs = { ["blob123"] = true },
         }),
       }
 
       mock_view.get_since_review_entry = DiffView.get_since_review_entry
-      mock_view.verify_commit_exists = DiffView.verify_commit_exists
+      mock_view.verify_blob_exists = DiffView.verify_blob_exists
 
       local result, err = mock_view:get_since_review_entry(file)
       eq(review_entry, result)
@@ -389,7 +392,7 @@ describe("since-review diff mode", function()
       }
 
       mock_view.get_since_review_entry = DiffView.get_since_review_entry
-      mock_view.verify_commit_exists = DiffView.verify_commit_exists
+      mock_view.verify_blob_exists = DiffView.verify_blob_exists
 
       local result, err = mock_view:get_since_review_entry(file)
       eq(nil, result)
@@ -407,21 +410,21 @@ describe("since-review diff mode", function()
       }
 
       mock_view.get_since_review_entry = DiffView.get_since_review_entry
-      mock_view.verify_commit_exists = DiffView.verify_commit_exists
+      mock_view.verify_blob_exists = DiffView.verify_blob_exists
 
       local result, err = mock_view:get_since_review_entry(file)
       eq(nil, result)
       eq("File has not been reviewed", err)
     end)
 
-    it("returns error when review entry has no commit_hash (backward compatibility)", function()
+    it("returns error when review entry has no blob_hash", function()
       local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
 
       local file = create_file_entry("src/file.lua")
       local review_entry = {
-        blob_hash = "blob123",
+        -- No blob_hash
         reviewed_at = os.time(),
-        -- No commit_hash (legacy review entry)
+        commit_hash = "abc123",
       }
 
       local mock_view = {
@@ -432,21 +435,21 @@ describe("since-review diff mode", function()
       }
 
       mock_view.get_since_review_entry = DiffView.get_since_review_entry
-      mock_view.verify_commit_exists = DiffView.verify_commit_exists
+      mock_view.verify_blob_exists = DiffView.verify_blob_exists
 
       local result, err = mock_view:get_since_review_entry(file)
       eq(nil, result)
-      eq("Review was saved without commit information", err)
+      eq("Review was saved without blob information", err)
     end)
 
-    it("returns error when reviewed commit no longer exists (force-push)", function()
+    it("returns error when reviewed blob no longer exists (garbage collected)", function()
       local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
 
       local file = create_file_entry("src/file.lua")
       local review_entry = {
-        blob_hash = "blob123",
+        blob_hash = "deleted_blob",
         reviewed_at = os.time(),
-        commit_hash = "deleted_commit",
+        commit_hash = "abc123",
       }
 
       local mock_view = {
@@ -454,16 +457,16 @@ describe("since-review diff mode", function()
           ["src/file.lua"] = review_entry,
         }),
         adapter = create_mock_adapter({
-          existing_commits = {}, -- Commit doesn't exist
+          existing_blobs = {}, -- Blob doesn't exist
         }),
       }
 
       mock_view.get_since_review_entry = DiffView.get_since_review_entry
-      mock_view.verify_commit_exists = DiffView.verify_commit_exists
+      mock_view.verify_blob_exists = DiffView.verify_blob_exists
 
       local result, err = mock_view:get_since_review_entry(file)
       eq(nil, result)
-      assert.is_truthy(string.find(err, "Reviewed commit no longer exists"))
+      assert.is_truthy(string.find(err, "Reviewed file content no longer exists"))
     end)
 
     it("returns error when file entry is invalid", function()
@@ -475,7 +478,7 @@ describe("since-review diff mode", function()
       }
 
       mock_view.get_since_review_entry = DiffView.get_since_review_entry
-      mock_view.verify_commit_exists = DiffView.verify_commit_exists
+      mock_view.verify_blob_exists = DiffView.verify_blob_exists
 
       local result, err = mock_view:get_since_review_entry(nil)
       eq(nil, result)
@@ -488,7 +491,7 @@ describe("since-review diff mode", function()
   end)
 
   describe("_create_since_review_entry", function()
-    it("creates a new entry with review commit as left revision", function()
+    it("creates a new entry with review blob_hash as left revision", function()
       local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
       local FileEntry = require("diffview.scene.file_entry").FileEntry
       local GitRev = require("diffview.vcs.adapters.git.rev").GitRev
@@ -520,7 +523,9 @@ describe("since-review diff mode", function()
         commit_hash = "review_commit_abc",
       }
 
-      local mock_view = {}
+      local mock_view = {
+        adapter = adapter,
+      }
       mock_view._create_since_review_entry = DiffView._create_since_review_entry
 
       local result = mock_view:_create_since_review_entry(file, review_entry)
@@ -531,11 +536,15 @@ describe("since-review diff mode", function()
       eq("src/file.lua", call_opts.path)
       eq(adapter, call_opts.adapter)
 
-      -- Check that left revision is the review commit
-      eq("review_commit_abc", call_opts.revs.a.commit)
+      -- Check that left revision uses the blob_hash (CUSTOM type)
+      eq("blob123", call_opts.revs.a.commit)
+      eq(RevType.CUSTOM, call_opts.revs.a.type)
 
       -- Check that right revision is preserved
       eq(file.revs.b, call_opts.revs.b)
+
+      -- Check that a custom get_data function is provided
+      neq(nil, call_opts.get_data)
 
       -- Restore original
       FileEntry.with_layout = original_with_layout
@@ -571,15 +580,15 @@ describe("since-review diff mode", function()
             ["src/reviewed.lua"] = "same_hash", -- Same = reviewed
             ["src/changed.lua"] = "new_hash",   -- Different = changed
           },
-          existing_commits = {
-            ["commit123"] = true,
-            ["commit456"] = true,
+          existing_blobs = {
+            ["same_hash"] = true,
+            ["old_hash"] = true,
           },
         }),
       }
 
       mock_view.get_since_review_entry = DiffView.get_since_review_entry
-      mock_view.verify_commit_exists = DiffView.verify_commit_exists
+      mock_view.verify_blob_exists = DiffView.verify_blob_exists
 
       -- Unreviewed file should return error
       local result, err = mock_view:get_since_review_entry(unreviewed_file)
@@ -595,7 +604,7 @@ describe("since-review diff mode", function()
       result, err = mock_view:get_since_review_entry(changed_file)
       neq(nil, result)
       eq(nil, err)
-      eq("commit456", result.commit_hash)
+      eq("old_hash", result.blob_hash)
     end)
   end)
 
@@ -687,14 +696,14 @@ describe("since-review diff mode", function()
   end)
 
   describe("fallback behavior", function()
-    it("falls back to full diff when commit is unavailable", function()
+    it("falls back to full diff when blob is unavailable", function()
       local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
 
       local file = create_file_entry("src/file.lua")
       local review_entry = {
-        blob_hash = "blob123",
+        blob_hash = "deleted_blob",
         reviewed_at = os.time(),
-        commit_hash = "deleted_commit",
+        commit_hash = "abc123",
       }
 
       local mock_view = {
@@ -702,12 +711,12 @@ describe("since-review diff mode", function()
           ["src/file.lua"] = review_entry,
         }),
         adapter = create_mock_adapter({
-          existing_commits = {}, -- Commit was garbage collected
+          existing_blobs = {}, -- Blob was garbage collected
         }),
       }
 
       mock_view.get_since_review_entry = DiffView.get_since_review_entry
-      mock_view.verify_commit_exists = DiffView.verify_commit_exists
+      mock_view.verify_blob_exists = DiffView.verify_blob_exists
 
       -- Should return nil with error message (triggering fallback)
       local result, err = mock_view:get_since_review_entry(file)
@@ -715,14 +724,14 @@ describe("since-review diff mode", function()
       assert.is_truthy(string.find(err, "no longer exists"))
     end)
 
-    it("falls back to full diff when no commit_hash stored", function()
+    it("falls back to full diff when no blob_hash stored", function()
       local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
 
       local file = create_file_entry("src/file.lua")
       local review_entry = {
-        blob_hash = "blob123",
+        -- No blob_hash - legacy entry
         reviewed_at = os.time(),
-        -- No commit_hash - legacy entry
+        commit_hash = "abc123",
       }
 
       local mock_view = {
@@ -733,11 +742,11 @@ describe("since-review diff mode", function()
       }
 
       mock_view.get_since_review_entry = DiffView.get_since_review_entry
-      mock_view.verify_commit_exists = DiffView.verify_commit_exists
+      mock_view.verify_blob_exists = DiffView.verify_blob_exists
 
       local result, err = mock_view:get_since_review_entry(file)
       eq(nil, result)
-      assert.is_truthy(string.find(err, "without commit information"))
+      assert.is_truthy(string.find(err, "without blob information"))
     end)
   end)
 end)
