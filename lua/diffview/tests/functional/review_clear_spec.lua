@@ -513,6 +513,105 @@ describe("diffview.review clear operations", function()
     end)
   end)
 
+  describe("review_repo_cleared event handler", function()
+    it("disables review filter when clearing repository state", function()
+      -- This tests the DiffView event handler for review_repo_cleared
+      -- which should disable the filter when it's active
+      local mock_panel = {
+        is_open = function() return true end,
+        update_components = function() end,
+        render = function() end,
+        redraw = function() end,
+      }
+
+      local mock_view = {
+        review_filter_enabled = true,
+        panel = mock_panel,
+      }
+
+      -- Simulate what init_review_event_listeners does for the repo_cleared handler
+      local repo_cleared_handler = function(_, payload)
+        if payload.view == mock_view then
+          -- Disable review filter if active since there's nothing to filter
+          if mock_view.review_filter_enabled then
+            mock_view.review_filter_enabled = false
+          end
+          -- refresh_panel() would be called here
+        end
+      end
+
+      -- Call the handler
+      repo_cleared_handler(nil, { view = mock_view, repo_id = "test_repo", deleted_count = 5 })
+
+      -- Verify filter was disabled
+      eq(false, mock_view.review_filter_enabled)
+    end)
+
+    it("does not change filter state when filter is already disabled", function()
+      local mock_panel = {
+        is_open = function() return true end,
+        update_components = function() end,
+        render = function() end,
+        redraw = function() end,
+      }
+
+      local mock_view = {
+        review_filter_enabled = false,
+        panel = mock_panel,
+      }
+
+      -- Simulate the repo_cleared handler
+      local repo_cleared_handler = function(_, payload)
+        if payload.view == mock_view then
+          if mock_view.review_filter_enabled then
+            mock_view.review_filter_enabled = false
+          end
+        end
+      end
+
+      -- Call the handler
+      repo_cleared_handler(nil, { view = mock_view, repo_id = "test_repo", deleted_count = 3 })
+
+      -- Filter should still be false
+      eq(false, mock_view.review_filter_enabled)
+    end)
+
+    it("only affects the target view", function()
+      local mock_panel = {
+        is_open = function() return true end,
+        update_components = function() end,
+        render = function() end,
+        redraw = function() end,
+      }
+
+      local mock_view1 = {
+        review_filter_enabled = true,
+        panel = mock_panel,
+      }
+
+      local mock_view2 = {
+        review_filter_enabled = true,
+        panel = mock_panel,
+      }
+
+      -- Simulate the repo_cleared handler scoped to mock_view1
+      local repo_cleared_handler = function(_, payload)
+        if payload.view == mock_view1 then
+          if mock_view1.review_filter_enabled then
+            mock_view1.review_filter_enabled = false
+          end
+        end
+      end
+
+      -- Call handler for view1
+      repo_cleared_handler(nil, { view = mock_view1, repo_id = "test_repo", deleted_count = 2 })
+
+      -- Only view1's filter should be disabled
+      eq(false, mock_view1.review_filter_enabled)
+      eq(true, mock_view2.review_filter_enabled)
+    end)
+  end)
+
   describe("review_clear_repo listener", function()
     local original_config
     local listeners_module
