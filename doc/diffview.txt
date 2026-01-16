@@ -741,6 +741,8 @@ review                                          *diffview-config-review*
             `<leader>rm`     Mark current file as reviewed
             `<leader>rM`     Mark all files as reviewed
             `<leader>rc`     Clear review status for current file
+            `<leader>rC`     Clear all review state for branch (with confirm)
+            `<leader>rX`     Clear all review state for repo (with confirm)
 
 hooks                                           *diffview-config-hooks*
         Type: `table<string, function>`, Default: `{}`
@@ -1209,6 +1211,42 @@ review_clear_file                               *diffview-actions-review_clear_f
 
         Clear the review state for the current file. The file will appear as
         unreviewed again. Only available when review tracking is enabled.
+
+review_clear_all                                *diffview-actions-review_clear_all*
+        Contexts: `view`, `file_panel`
+
+        Clear all review state for the current branch. Shows a confirmation
+        dialog before clearing with the count of reviewed files and branch
+        name. After clearing, all files will appear as "unreviewed".
+
+        If no files are currently marked as reviewed, an info message is
+        shown instead.
+
+        This is useful when:
+        - Starting over on a review after significant changes
+        - The previous review is no longer relevant
+        - Review state has become stale (blob hashes point to
+          garbage-collected objects)
+
+        Only available when review tracking is enabled.
+
+review_clear_repo                               *diffview-actions-review_clear_repo*
+        Contexts: `view`, `file_panel`
+
+        Clear all review state for the entire repository (all branches).
+        Shows a confirmation dialog before clearing with the count of
+        branches that have review state.
+
+        This deletes all review state files for the repository from the
+        cache directory. The in-memory state for the current branch is also
+        cleared.
+
+        This is useful when:
+        - A repository has been relocated or removed
+        - You want to clear all historical review data
+        - Starting fresh across all branches
+
+        Only available when review tracking is enabled.
 
 review_mark_all                                 *diffview-actions-review_mark_all*
         Contexts: `diff_view`, `file_panel`

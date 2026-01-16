@@ -171,6 +171,26 @@ you need to re-review it.
 The review state persists across Neovim sessions, stored in
 `~/.cache/diffview.nvim/reviews/` by default.
 
+### Clearing Review State
+
+If you need to start over on a review, you can clear review state:
+
+- `<leader>rC` - Clear all review state for this branch (with confirmation)
+- `<leader>rX` - Clear all review state for this repository (with confirmation)
+
+Both commands show a confirmation dialog before clearing. The branch-level clear
+(`<leader>rC`) shows the count of reviewed files and branch name, while the
+repository-level clear (`<leader>rX`) shows the count of branches with review state.
+
+Clearing branch state is useful when:
+- The previous review is no longer relevant
+- You want to start fresh after significant changes to the branch
+- Review state has become stale (e.g., blob hashes point to garbage-collected objects)
+
+Clearing repository state is useful when:
+- A repository has been relocated or removed
+- You want to clear all historical review data across all branches
+
 ## Inspecting Diffs for Stashes
 
 The latest Git stash is always stored in the reference `refs/stash`. We can
