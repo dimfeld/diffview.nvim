@@ -200,6 +200,7 @@ function DiffView:close()
       DiffviewGlobal.emitter:off(self.review_event_callbacks.file_marked, "review_file_marked")
       DiffviewGlobal.emitter:off(self.review_event_callbacks.file_cleared, "review_file_cleared")
       DiffviewGlobal.emitter:off(self.review_event_callbacks.all_cleared, "review_all_cleared")
+      DiffviewGlobal.emitter:off(self.review_event_callbacks.repo_cleared, "review_repo_cleared")
       self.review_event_callbacks = nil
     end
 
@@ -657,9 +658,20 @@ function DiffView:init_review_event_listeners()
     end
   end
 
+  self.review_event_callbacks.repo_cleared = function(_, payload)
+    if payload.view == self then
+      -- Disable review filter if active since there's nothing to filter
+      if self.review_filter_enabled then
+        self.review_filter_enabled = false
+      end
+      refresh_panel()
+    end
+  end
+
   DiffviewGlobal.emitter:on("review_file_marked", self.review_event_callbacks.file_marked)
   DiffviewGlobal.emitter:on("review_file_cleared", self.review_event_callbacks.file_cleared)
   DiffviewGlobal.emitter:on("review_all_cleared", self.review_event_callbacks.all_cleared)
+  DiffviewGlobal.emitter:on("review_repo_cleared", self.review_event_callbacks.repo_cleared)
 end
 
 ---Infer the current selected file. If the file panel is focused: return the
