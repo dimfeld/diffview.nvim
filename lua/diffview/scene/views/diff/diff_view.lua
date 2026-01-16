@@ -335,6 +335,8 @@ DiffView._set_file = async.void(function(self, file)
       local review_entry, err = self:get_since_review_entry(file)
       if review_entry then
         entry_to_use = self:_create_since_review_entry(file, review_entry)
+        -- Mark the entry as active so its files can be opened
+        entry_to_use:set_active(true)
         using_since_review = true
         -- Show indicator that we're viewing since-review diff
         api.nvim_echo({{ "[Since review]", "Comment" }}, false, {})
