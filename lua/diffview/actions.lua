@@ -632,6 +632,7 @@ local action_names = {
   "prev_entry",
   "refresh_files",
   "restore_entry",
+  "review_cleanup",
   "review_clear_all",
   "review_clear_file",
   "review_clear_repo",

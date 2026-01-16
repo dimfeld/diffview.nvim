@@ -423,5 +423,47 @@ return function(view)
     review_toggle_since_review = function()
       view:toggle_since_review_mode()
     end,
+    review_cleanup = function()
+      local cfg = lazy.require("diffview.config").get_config()
+      if not cfg.review or not cfg.review.enabled then
+        utils.info("Review feature is not enabled")
+        return
+      end
+
+      -- Get preview first
+      local preview = review.get_cleanup_preview(view)
+
+      if preview.error then
+        utils.warn("Cleanup preview failed: " .. preview.error)
+        return
+      end
+
+      if #preview.deleted_branches == 0 then
+        utils.info("No stale review data found for this repository")
+        return
+      end
+
+      -- Build confirmation message
+      local branch_list = table.concat(preview.deleted_branches, ", ")
+      if #branch_list > 60 then
+        branch_list = branch_list:sub(1, 57) .. "..."
+      end
+
+      vim.ui.select({ "Yes", "No" }, {
+        prompt = ("Clean up review state for %d stale branch(es)? [%s]"):format(
+          preview.deleted_count,
+          branch_list
+        ),
+      }, function(choice)
+        if choice == "Yes" then
+          local result = review.cleanup_stale_reviews(view)
+          if result.error then
+            utils.warn("Cleanup failed: " .. result.error)
+          else
+            utils.info(("Cleaned up review state for %d branch(es)"):format(result.deleted_count))
+          end
+        end
+      end)
+    end,
   }
 end

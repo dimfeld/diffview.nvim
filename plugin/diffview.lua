@@ -55,3 +55,42 @@ command("DiffviewLog", function()
     vim.fn.fnameescape(DiffviewGlobal.logger.outfile)
   ))
 end, { nargs = 0, bang = true })
+
+command("DiffviewReviewCleanup", function(ctx)
+  local lib = lazy.require("diffview.lib")
+  local review = lazy.require("diffview.review")
+  local utils = lazy.require("diffview.utils")
+
+  local view = lib.get_current_view()
+  if not view then
+    -- Try to create a temporary adapter for current directory
+    local adapter = diffview.get_adapter()
+    if not adapter then
+      utils.warn("Not in a git repository")
+      return
+    end
+    -- Create minimal view-like object with adapter
+    view = { adapter = adapter }
+  end
+
+  local dry_run = ctx.bang  -- Use ! for dry-run mode
+
+  if dry_run then
+    local preview = review.get_cleanup_preview(view)
+    if preview.error then
+      utils.warn("Preview failed: " .. preview.error)
+      return
+    end
+    if #preview.deleted_branches == 0 then
+      utils.info("No stale review data found")
+    else
+      utils.info(("Would clean up %d branch(es): %s"):format(
+        preview.deleted_count,
+        table.concat(preview.deleted_branches, ", ")
+      ))
+    end
+  else
+    -- Trigger the action which shows confirmation UI
+    diffview.emit("review_cleanup")
+  end
+end, { nargs = 0, bang = true })
