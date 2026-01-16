@@ -3,6 +3,9 @@
 Single tabpage interface for easily cycling through diffs for all modified files
 for any git rev.
 
+This is a fork of [sindrets/diffview.nvim](https://github.com/sindrets/diffview.nvim), with extra support for
+reviewing PRs and other diffs.
+
 ![preview](https://user-images.githubusercontent.com/2786478/131269942-e34100dd-cbb9-48fe-af31-6e518ce06e9e.png)
 
 
