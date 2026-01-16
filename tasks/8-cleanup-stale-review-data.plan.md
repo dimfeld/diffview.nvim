@@ -870,7 +870,7 @@ Create comprehensive tests:
 
 ### Completed (So Far)
 - Task 1: unsanitize_branch() helper and get_stored_branches(repo_id) in ReviewStore
-- Task 2: get_all_branches() method in GitAdapter (local + remote branches, with short form extraction)
+- Task 2: get_all_branches() method in GitAdapter (local + remote branches, with short form extraction only for remotes)
 - Task 3: get_latest_review_timestamp(file_path) in ReviewStore
 - Task 4: cleanup_stale_branches(adapter, opts) in ReviewStore with dry_run and max_age_days support
 - Task 5: get_cleanup_preview() and cleanup_stale_reviews() in review.lua
@@ -887,6 +887,7 @@ Create comprehensive tests:
 - Additional: Unit tests for GitAdapter:get_all_branches() in git_adapter_spec.lua
 - Additional: Tests for auto-cleanup and user autocommand emission (7 new tests)
 - Additional: Documentation for DiffviewReviewCleanupCompleted user autocommand in doc/diffview.txt
+- Fix: GitAdapter:get_all_branches() now correctly extracts short forms only from remote branches (not local branches with slashes)
 
 ### Remaining
 - None
@@ -901,6 +902,7 @@ Create comprehensive tests:
 - cleanup_stale_reviews emits review_cleanup_completed event only when files are actually deleted
 - Command works both with and without active DiffView - implements confirmation dialog inline when no view is active
 - Auto-cleanup runs via vim.schedule() to avoid blocking view opening
+- GitAdapter:get_all_branches() uses separate git calls for local vs remote branches to ensure short form extraction only applies to remote branches
 
 ### Risks / Blockers
 - None
