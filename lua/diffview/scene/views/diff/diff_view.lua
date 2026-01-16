@@ -979,9 +979,11 @@ function DiffView:toggle_since_review_mode()
   -- to show only files that need attention (unreviewed or changed)
   if self.since_review_mode and not self.review_filter_enabled then
     self.review_filter_enabled = true
-    if self.panel and self.panel.update_components then
-      self.panel:update_components()
-    end
+  end
+
+  -- Update components to refresh the file tree (needed for both ON and OFF)
+  if self.panel and self.panel.update_components then
+    self.panel:update_components()
   end
 
   -- Provide feedback about the mode change
