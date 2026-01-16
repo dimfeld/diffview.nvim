@@ -116,6 +116,9 @@ function M.init()
   DiffviewGlobal.emitter:on("diff_buf_win_enter", function(_)
     api.nvim_exec_autocmds("User", { pattern = "DiffviewDiffBufWinEnter", modeline = false })
   end)
+  DiffviewGlobal.emitter:on("review_cleanup_completed", function(_)
+    api.nvim_exec_autocmds("User", { pattern = "DiffviewReviewCleanupCompleted", modeline = false })
+  end)
 
   -- Set up completion wrapper used by `vim.ui.input()`
   vim.cmd([[

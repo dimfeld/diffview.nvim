@@ -105,6 +105,18 @@ function DiffView:post_open()
     local branch = self.adapter:get_current_branch()
     local store = review_store.get_store()
     self.review_state = store:load_state_sync(self.adapter, branch)
+
+    -- Auto-cleanup stale branches if enabled (after review state is loaded)
+    if cfg.review.auto_cleanup then
+      -- Run async to not block view opening
+      local view = self
+      vim.schedule(function()
+        local result = review.cleanup_stale_reviews(view)
+        if result.deleted_count > 0 then
+          utils.info(("Auto-cleaned %d stale branch review state(s)"):format(result.deleted_count))
+        end
+      end)
+    end
   end
 
   if cfg.watch_index and self.adapter:instanceof(GitAdapter.__get()) then
