@@ -979,8 +979,15 @@ function DiffView:toggle_since_review_mode()
 
   -- When enabling since-review mode, also enable the review filter
   -- to show only files that need attention (unreviewed or changed)
-  if self.since_review_mode and not self.review_filter_enabled then
-    self.review_filter_enabled = true
+  -- When disabling, also disable the filter to show all files again
+  if self.since_review_mode then
+    if not self.review_filter_enabled then
+      self.review_filter_enabled = true
+    end
+  else
+    if self.review_filter_enabled then
+      self.review_filter_enabled = false
+    end
   end
 
   -- Update components to refresh the file tree (needed for both ON and OFF)
