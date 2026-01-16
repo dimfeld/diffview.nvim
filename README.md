@@ -81,6 +81,82 @@ Get started by opening file history for:
 
 For more info, see `:h :DiffviewFileHistory`.
 
+## Review Tracking
+
+This fork adds review tracking functionality to help you keep track of which
+files you've reviewed in a diff. This is particularly useful when reviewing
+large PRs or diffs that span multiple sessions.
+
+### How It Works
+
+When you mark a file as reviewed, diffview stores the file's blob hash (the
+content hash) along with a timestamp. This has several advantages:
+
+- **Survives rebases and amends**: Since the blob hash is content-based, your
+  review state persists even if commit hashes change (common when using tools
+  like Jujutsu or when force-pushing).
+- **Detects changes**: If a file is modified after you reviewed it, diffview
+  detects this by comparing blob hashes and marks it as "changed".
+
+### Review Statuses
+
+Files in the file panel show indicators based on their review status:
+
+- **Unreviewed** (blank): File has never been marked as reviewed
+- **Reviewed** (●): File was marked as reviewed and hasn't changed
+- **Changed** (◐): File was marked as reviewed but has been modified since
+
+### Key Features
+
+**Mark files as reviewed:**
+- `<leader>rm` - Mark current file as reviewed
+- `<leader>rM` - Mark all files as reviewed
+
+**Navigate by review status:**
+- `]r` / `[r` - Jump to next/previous file pending review (unreviewed or changed)
+- `]R` / `[R` - Jump to next/previous unreviewed file
+
+**Review filter:**
+- `<leader>rf` - Toggle filter to show only files pending review
+
+**Since-review diff mode:**
+- `<leader>rs` - Toggle since-review mode. When enabled, files marked as
+  "changed" show only the diff since your last review, not the full diff.
+  This helps you focus on what changed since you last looked at a file.
+
+**Clear review state:**
+- `<leader>rc` - Clear review status for current file
+- `<leader>rC` - Clear all review state for this branch
+- `<leader>rX` - Clear all review state for this repository
+
+### Configuration
+
+```lua
+review = {
+  enabled = true,              -- Enable review tracking
+  cache_dir = nil,             -- Storage location (default: ~/.cache/diffview.nvim/reviews/)
+  auto_cleanup = false,        -- Auto-cleanup stale branch data on DiffView open
+  cleanup_age_days = 30,       -- Age threshold for auto-cleanup (days)
+  symbols = {
+    unreviewed = " ",          -- No indicator
+    reviewed = "●",            -- Filled circle (green)
+    changed = "◐",             -- Half-filled circle (yellow)
+  },
+}
+```
+
+### Cleanup
+
+Review state is stored per-branch. Over time, you may accumulate review data
+for branches that no longer exist. Use `:DiffviewReviewCleanup` to remove
+stale data:
+
+- `:DiffviewReviewCleanup` - Interactively clean up stale branch data
+- `:DiffviewReviewCleanup!` - Preview what would be cleaned up (dry run)
+
+You can also enable `auto_cleanup = true` in the config to automatically clean
+up stale data when opening a DiffView.
+
 ## Usage
 
 ### `:DiffviewOpen [git rev] [options] [ -- {paths...}]`
