@@ -16,7 +16,7 @@ references:
 planGeneratedAt: 2026-01-16T02:05:48.392Z
 promptsGeneratedAt: 2026-01-16T02:05:48.392Z
 createdAt: 2026-01-15T00:26:26.637Z
-updatedAt: 2026-01-16T03:03:58.621Z
+updatedAt: 2026-01-16T03:05:04.982Z
 tasks:
   - title: Extend ReviewEntry to store commit hash
     done: true
