@@ -5,7 +5,7 @@ goal: ""
 id: 5
 uuid: 409b88c6-22c0-43f9-97ec-ff6a12b9b0df
 generatedBy: agent
-status: in_progress
+status: done
 priority: medium
 dependencies:
   - 4
@@ -16,27 +16,55 @@ references:
 planGeneratedAt: 2026-01-16T07:11:45.679Z
 promptsGeneratedAt: 2026-01-16T07:11:45.679Z
 createdAt: 2026-01-15T00:28:09.548Z
-updatedAt: 2026-01-16T07:16:34.814Z
+updatedAt: 2026-01-16T07:23:40.401Z
 tasks:
   - title: Add review keymaps to view group
-    done: false
+    done: true
     description: Add keymaps for review_mark_file, review_mark_all, and
       review_clear_file to the view keymap group in lua/diffview/config.lua
   - title: Add review keymaps to file_panel group
-    done: false
+    done: true
     description: Add the same three keymaps to the file_panel keymap group in
       lua/diffview/config.lua
   - title: Update doc/diffview.txt with keymap documentation
-    done: false
+    done: true
     description: Add a summary of default review keymaps to the review configuration
       section in doc/diffview.txt
   - title: Update USAGE.md with marking files section
-    done: false
+    done: true
     description: Add a new subsection documenting the mark/clear keymaps to the PR
       review workflow in USAGE.md
   - title: Run tests to verify no regressions
-    done: false
+    done: true
     description: Execute make test to ensure all existing tests pass
+changedFiles:
+  - .rmfilter/config/rmplan.yml
+  - AGENTS.md
+  - CLAUDE.md
+  - README.md
+  - USAGE.md
+  - doc/diffview.txt
+  - doc/diffview_defaults.txt
+  - lua/diffview/actions.lua
+  - lua/diffview/config.lua
+  - lua/diffview/hl.lua
+  - lua/diffview/init.lua
+  - lua/diffview/review.lua
+  - lua/diffview/review_store.lua
+  - lua/diffview/scene/views/diff/diff_view.lua
+  - lua/diffview/scene/views/diff/file_panel.lua
+  - lua/diffview/scene/views/diff/listeners.lua
+  - lua/diffview/scene/views/diff/render.lua
+  - lua/diffview/tests/functional/git_adapter_spec.lua
+  - lua/diffview/tests/functional/render_review_indicator_spec.lua
+  - lua/diffview/tests/functional/review_actions_spec.lua
+  - lua/diffview/tests/functional/review_api_spec.lua
+  - lua/diffview/tests/functional/review_filter_spec.lua
+  - lua/diffview/tests/functional/review_navigation_spec.lua
+  - lua/diffview/tests/functional/review_store_spec.lua
+  - lua/diffview/tests/functional/since_review_diff_spec.lua
+  - lua/diffview/ui/models/file_tree/file_tree.lua
+  - lua/diffview/vcs/adapters/git/init.lua
 tags: []
 ---
 
@@ -249,3 +277,29 @@ Execute `make test` to ensure all existing tests pass and no regressions were in
 9. Close and reopen diffview, verify review state persisted
 10. Test the same keymaps from the diff buffer (not file panel)
 11. Press `g?` to open help panel and verify new keymaps appear
+
+## Current Progress
+### Current State
+- All tasks complete, plan marked as done
+
+### Completed (So Far)
+- Added keymaps `<leader>rm`, `<leader>rM`, `<leader>rc` to view group in config.lua
+- Added keymaps `<leader>rm`, `<leader>rM`, `<leader>rc` to file_panel group in config.lua
+- Added Default Review Keymaps summary to doc/diffview.txt (after review config example)
+- Added "Marking Files as Reviewed" section to USAGE.md
+- Added keymaps to doc/diffview_defaults.txt (both view and file_panel sections)
+- Added keymaps to README.md example configuration (both view and file_panel sections)
+- All 269 tests pass
+
+### Remaining
+- None
+
+### Next Iteration Guidance
+- None - plan complete
+
+### Decisions / Changes
+- Followed suggested keymap conventions: `<leader>rm` (mark), `<leader>rM` (mark all), `<leader>rc` (clear)
+- Code review identified doc/diffview_defaults.txt and README.md also needed updating to stay in sync
+
+### Risks / Blockers
+- None
