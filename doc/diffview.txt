@@ -1414,8 +1414,6 @@ actions:
         • |diffview-actions-review_clear_file|
         • |diffview-actions-review_mark_all|
         • |diffview-actions-review_mark_file|
-        • |diffview-actions-review_toggle_filter|
-        • |diffview-actions-review_toggle_since_review|
         • |diffview-actions-view_windo|
 
 ==============================================================================
@@ -1520,6 +1518,18 @@ gf                      Open the local version of the file in a different
                                                 *diffview-maps-focus_files*
 <leader>e               Bring focus to the file panel.
 
+                                                *diffview-maps-review_toggle_filter*
+<leader>rf              Toggle the review filter. When enabled, only files
+                        pending review (unreviewed or changed) are shown in
+                        the file panel.
+
+                                                *diffview-maps-review_toggle_since_review*
+<leader>rs              Toggle since-review diff mode. When enabled, files with
+                        "changed" status show only changes since they were
+                        last marked reviewed. See
+                        |diffview-actions-review_toggle_since_review| for
+                        details about fallback behavior.
+
                                                 *diffview-maps-copy_hash*
 y                       Copy the commit hash of the entry under the cursor.
 
@@ -1570,6 +1580,10 @@ R                       Update the stats and entries in the file list.
 <leader>b               Toggle the file panel.
 
 <leader>e               Bring focus to the file panel.
+
+<leader>rf              Toggle the review filter (show only pending files).
+
+<leader>rs              Toggle since-review diff mode.
 
                                                 *diffview-maps-file-history-panel*
 File history panel maps ~
