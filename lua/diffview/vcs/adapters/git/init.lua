@@ -1365,6 +1365,44 @@ function GitAdapter:get_current_branch()
   return branch
 end
 
+---Get list of all branch names (local and remote-tracking)
+---Used for cleanup of stale review state
+---@return string[]|nil branches List of branch names, or nil on error
+function GitAdapter:get_all_branches()
+  -- Get both local and remote branches
+  local out, code = self:exec_sync({
+    "for-each-ref",
+    "--format=%(refname:short)",
+    "refs/heads/",
+    "refs/remotes/",
+  }, { cwd = self.ctx.toplevel, silent = true })
+
+  if code ~= 0 then
+    return nil
+  end
+
+  -- Filter out empty lines and normalize remote branch names
+  -- e.g., "origin/main" -> also add "main" as a valid name
+  local branches = {}
+  local seen = {}
+
+  for _, line in ipairs(out or {}) do
+    if line ~= "" and not seen[line] then
+      seen[line] = true
+      table.insert(branches, line)
+
+      -- For remote branches like "origin/main", also add the short form "main"
+      local short = line:match("^[^/]+/(.+)$")
+      if short and not seen[short] then
+        seen[short] = true
+        table.insert(branches, short)
+      end
+    end
+  end
+
+  return branches
+end
+
 ---@param path string
 ---@param rev_arg string?
 ---@return string?

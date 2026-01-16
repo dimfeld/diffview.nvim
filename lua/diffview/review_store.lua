@@ -232,6 +232,62 @@ function ReviewStore:sanitize_branch(branch)
   return branch:gsub("/", "__")
 end
 
+---Convert a sanitized filename back to possible branch names
+---Since we can't know if double underscores were originally slashes or literal,
+---we return both possibilities.
+---@param filename string The sanitized filename (e.g., "feature__foo.json")
+---@return string[] possible_branches List of possible original branch names
+function ReviewStore:unsanitize_branch(filename)
+  -- Strip .json extension
+  local name = filename:gsub("%.json$", "")
+
+  -- If there are no double underscores, only one possibility
+  if not name:find("__") then
+    return { name }
+  end
+
+  -- Return both: the literal name and the one with __ replaced by /
+  local with_slashes = name:gsub("__", "/")
+  return { name, with_slashes }
+end
+
+---@class StoredBranchInfo
+---@field filename string The JSON filename (e.g., "main.json")
+---@field possible_branches string[] List of possible original branch names
+
+---Get all stored branches for a repository
+---Scans the repo directory and returns information about stored branch files
+---@param repo_id string The repository ID
+---@return StoredBranchInfo[] stored_branches List of stored branch information
+function ReviewStore:get_stored_branches(repo_id)
+  local cache_dir = self:get_cache_dir()
+  local repo_dir = utils.path:join(cache_dir, repo_id)
+
+  -- Check if directory exists
+  local stat = utils.path:stat(repo_dir)
+  if not stat or stat.type ~= "directory" then
+    return {}
+  end
+
+  local result = {}
+  local handle = uv.fs_scandir(repo_dir)
+  if handle then
+    while true do
+      local name, ftype = uv.fs_scandir_next(handle)
+      if not name then break end
+      -- Only process .json files
+      if ftype == "file" and name:match("%.json$") then
+        table.insert(result, {
+          filename = name,
+          possible_branches = self:unsanitize_branch(name),
+        })
+      end
+    end
+  end
+
+  return result
+end
+
 ---Get the full path to the state file for a repo and branch
 ---@param repo_id string The repository ID
 ---@param branch string The branch name
@@ -389,6 +445,137 @@ function ReviewStore:load_state_sync(adapter, branch)
   end
 
   return ReviewState.from_table(data, self)
+end
+
+---@class CleanupResult
+---@field deleted_branches string[] Branch names that were deleted
+---@field deleted_count integer Number of files deleted
+---@field error string|nil Error message if cleanup failed
+
+---@class CleanupOptions
+---@field dry_run? boolean If true, don't actually delete, just return what would be deleted
+---@field max_age_days? integer Age threshold in days (default: 30). Used for detached HEAD and stale branch cleanup.
+
+---Get the most recent reviewed_at timestamp from a state file
+---@param file_path string Path to the JSON file
+---@return integer|nil timestamp The most recent reviewed_at timestamp, or nil on error
+function ReviewStore:get_latest_review_timestamp(file_path)
+  local ok, content = pcall(function()
+    local fd = assert(uv.fs_open(file_path, "r", 438))
+    local fstat = assert(uv.fs_fstat(fd))
+    local data = assert(uv.fs_read(fd, fstat.size, 0))
+    assert(uv.fs_close(fd))
+    return data
+  end)
+
+  if not ok or not content then return nil end
+
+  local decode_ok, data = pcall(vim.json.decode, content)
+  if not decode_ok or not data or not data.files then return nil end
+
+  local latest = 0
+  for _, entry in pairs(data.files) do
+    if entry.reviewed_at and entry.reviewed_at > latest then
+      latest = entry.reviewed_at
+    end
+  end
+
+  return latest > 0 and latest or nil
+end
+
+---Cleanup stale branches for a repository
+---Compares stored branch files against git branches and deletes stale ones.
+---A branch is considered stale if:
+---  1. It doesn't exist in git (local or remote), AND
+---  2. Its most recent review timestamp is older than max_age_days
+---Detached HEAD files are always cleaned up based on age alone.
+---@param adapter VCSAdapter The VCS adapter
+---@param opts? CleanupOptions
+---@return CleanupResult
+function ReviewStore:cleanup_stale_branches(adapter, opts)
+  opts = opts or {}
+  local max_age_days = opts.max_age_days or 30
+  local max_age_seconds = max_age_days * 24 * 60 * 60
+  local now = os.time()
+
+  local result = { deleted_branches = {}, deleted_count = 0 }
+
+  -- Get repo ID
+  local repo_id = self:get_repo_id(adapter)
+  if not repo_id then
+    result.error = "Could not determine repository ID"
+    return result
+  end
+
+  -- Get stored branches
+  local stored = self:get_stored_branches(repo_id)
+  if #stored == 0 then
+    return result  -- Nothing to clean up
+  end
+
+  -- Get git branches (local + remote)
+  local git_branches = adapter.get_all_branches and adapter:get_all_branches()
+  if not git_branches then
+    result.error = "Could not get git branches"
+    return result
+  end
+
+  -- Create lookup set for efficient checking
+  local git_branch_set = {}
+  for _, branch in ipairs(git_branches) do
+    git_branch_set[branch] = true
+  end
+
+  local cache_dir = self:get_cache_dir()
+  local repo_dir = utils.path:join(cache_dir, repo_id)
+
+  -- Find stale branches (stored branches that don't exist in git)
+  for _, stored_info in ipairs(stored) do
+    local is_stale = true
+    local is_detached = stored_info.filename:match("^detached%-")
+
+    -- Check if ANY of the possible branch names exists (skip for detached HEAD)
+    if not is_detached then
+      for _, possible_name in ipairs(stored_info.possible_branches) do
+        if git_branch_set[possible_name] then
+          is_stale = false
+          break
+        end
+      end
+    end
+
+    -- For detached HEAD files or stale branches, check age
+    if is_stale or is_detached then
+      local file_path = utils.path:join(repo_dir, stored_info.filename)
+      local latest_ts = self:get_latest_review_timestamp(file_path)
+
+      if latest_ts then
+        local age = now - latest_ts
+        if age < max_age_seconds then
+          is_stale = false  -- Too recent, don't delete
+        end
+      else
+        -- Can't determine age, be conservative and skip
+        is_stale = false
+      end
+    end
+
+    if is_stale then
+      table.insert(result.deleted_branches, stored_info.possible_branches[1])
+
+      if not opts.dry_run then
+        local file_path = utils.path:join(repo_dir, stored_info.filename)
+        local delete_ok = pcall(uv.fs_unlink, file_path)
+        if delete_ok then
+          result.deleted_count = result.deleted_count + 1
+        end
+      else
+        result.deleted_count = result.deleted_count + 1
+      end
+    end
+  end
+
+  return result
 end
 
 M.ReviewStore = ReviewStore
