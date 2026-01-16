@@ -701,6 +701,21 @@ review                                          *diffview-config-review*
                 to `~/.cache/diffview.nvim/reviews/`.
                 Default: `nil`
 
+            {auto_cleanup} (boolean)
+                Enable automatic cleanup of stale branch review data when
+                opening a DiffView. Stale branches are those that no longer
+                exist in git (local or remote). Cleanup is performed silently
+                in the background unless errors occur.
+                Default: `false`
+
+            {cleanup_age_days} (integer)
+                Age threshold in days for cleanup. Only review data older
+                than this many days will be removed during cleanup. This
+                applies to both stale branch files (branches that no longer
+                exist in git) and detached HEAD files. Branches that still
+                exist are never deleted based on age.
+                Default: `30`
+
             {symbols} (table)
                 Symbols used for the review state indicator in the file
                 panel. Each symbol should be a single character.
@@ -723,6 +738,8 @@ review                                          *diffview-config-review*
                 review = {
                   enabled = true,
                   cache_dir = vim.fn.stdpath("cache") .. "/my-reviews/",
+                  auto_cleanup = true,     -- Clean up stale branches on open
+                  cleanup_age_days = 14,   -- Only clean data older than 14 days
                   symbols = {
                     unreviewed = " ",
                     reviewed = "✓",

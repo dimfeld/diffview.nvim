@@ -92,6 +92,8 @@ DEFAULT CONFIG                                  *diffview.defaults*
     review = {          -- See |diffview-config-review|
       enabled = true,   -- Enable review tracking
       cache_dir = nil,  -- Review state storage (default: ~/.cache/diffview.nvim/reviews/)
+      auto_cleanup = false,    -- Auto-cleanup stale branch review data on DiffView open
+      cleanup_age_days = 30,   -- Age threshold for cleanup (days)
       symbols = {       -- Symbols for review state indicator in file panel
         unreviewed = " ",  -- Blank space (no indicator)
         reviewed = "●",    -- Filled circle (green)
