@@ -813,7 +813,7 @@ Add keymap documentation:
 ### Current State
 - All tasks complete - plan fully implemented
 - Branch-level (`<leader>rC`) and repository-level (`<leader>rX`) clear actions working
-- All 17 tests passing in review_clear_spec.lua
+- All 23 tests passing in review_clear_spec.lua
 
 ### Completed (So Far)
 - Task 1: Added `review_clear_all` and `review_clear_repo` action names to actions.lua
@@ -826,7 +826,7 @@ Add keymap documentation:
 - Task 8: Added action documentation to doc/diffview.txt with anchor tags
 - Task 9: Updated doc/diffview_defaults.txt to mirror config.lua
 - Task 10: Added "Clearing Review State" section to USAGE.md
-- Task 11: Comprehensive tests in review_clear_spec.lua (17 tests)
+- Task 11: Comprehensive tests in review_clear_spec.lua (23 tests total)
 
 ### Remaining
 - None
@@ -837,6 +837,8 @@ Add keymap documentation:
 ### Decisions / Changes
 - The `review_clear_repo` listener was implemented alongside Task 4 since they're closely related
 - Event listener cleanup is properly handled in DiffView:close()
+- Fixed: `review_all_cleared` event handler now disables review filter when active (matching `review_repo_cleared` behavior)
+- Added tests for both `review_all_cleared` and `review_repo_cleared` event handlers' filter disable behavior
 
 ### Risks / Blockers
 - None
