@@ -16,6 +16,7 @@ local DEFAULT_CACHE_DIR = "~/.cache/diffview.nvim/reviews"
 ---@class ReviewEntry
 ---@field blob_hash string Git blob hash of the file content when marked reviewed
 ---@field reviewed_at number Unix timestamp of when the file was reviewed
+---@field commit_hash? string Git commit hash when file was marked reviewed (optional for backward compatibility)
 
 ---@class ReviewState : diffview.Object
 ---@operator call : ReviewState
@@ -45,11 +46,13 @@ end
 ---Mark a file as reviewed
 ---@param path string Relative path to the file in the repo
 ---@param blob_hash string Git blob hash of the file content
+---@param commit_hash? string Git commit hash at the time of review (optional for backward compatibility)
 ---@param skip_save? boolean If true, skip automatic save (useful for batch operations)
-function ReviewState:set_file_reviewed(path, blob_hash, skip_save)
+function ReviewState:set_file_reviewed(path, blob_hash, commit_hash, skip_save)
   self.files[path] = {
     blob_hash = blob_hash,
     reviewed_at = os.time(),
+    commit_hash = commit_hash,  -- may be nil for legacy compatibility
   }
   self.dirty = true
   -- Trigger save asynchronously (unless skip_save is true for batch operations)

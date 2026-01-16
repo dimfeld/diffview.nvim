@@ -63,6 +63,9 @@ describe("diffview.review", function()
         file_blob_hash = function()
           return nil
         end,
+        head_rev = function()
+          return { commit = "abc123def456" }
+        end,
       }
       local mock_view = { review_state = mock_review_state, adapter = mock_adapter }
       local file_entry = { path = "src/test.lua" }
@@ -74,16 +77,20 @@ describe("diffview.review", function()
     it("returns true and marks file when everything is valid", function()
       config._config = { review = { enabled = true } }
 
-      local marked_path, marked_hash = nil, nil
+      local marked_path, marked_hash, marked_commit = nil, nil, nil
       local mock_review_state = {
-        set_file_reviewed = function(_, path, hash)
+        set_file_reviewed = function(_, path, hash, commit_hash)
           marked_path = path
           marked_hash = hash
+          marked_commit = commit_hash
         end,
       }
       local mock_adapter = {
         file_blob_hash = function(_, path, rev)
-          return "abc123def456"
+          return "blob_hash_123"
+        end,
+        head_rev = function()
+          return { commit = "commit_sha_456" }
         end,
       }
       local mock_view = { review_state = mock_review_state, adapter = mock_adapter }
@@ -92,7 +99,8 @@ describe("diffview.review", function()
       local result = review.mark_file_reviewed(mock_view, file_entry)
       assert.is_true(result)
       assert.equals("src/test.lua", marked_path)
-      assert.equals("abc123def456", marked_hash)
+      assert.equals("blob_hash_123", marked_hash)
+      assert.equals("commit_sha_456", marked_commit)
     end)
   end)
 
@@ -132,8 +140,8 @@ describe("diffview.review", function()
       local marked_files = {}
       local mock_store = { save_state = function() end }
       local mock_review_state = {
-        set_file_reviewed = function(_, path, hash)
-          marked_files[path] = hash
+        set_file_reviewed = function(_, path, hash, commit_hash)
+          marked_files[path] = { hash = hash, commit_hash = commit_hash }
         end,
         store = mock_store,
       }
@@ -163,6 +171,9 @@ describe("diffview.review", function()
         file_blob_hash = function(_, path, rev)
           return blob_hashes[path]
         end,
+        head_rev = function()
+          return { commit = "head_commit_sha" }
+        end,
       }
       local mock_view = {
         review_state = mock_review_state,
@@ -172,9 +183,13 @@ describe("diffview.review", function()
 
       local result = review.mark_all_reviewed(mock_view)
       assert.equals(3, result)
-      assert.equals("hash111", marked_files["src/foo.lua"])
-      assert.equals("hash222", marked_files["src/bar.lua"])
-      assert.equals("hash333", marked_files["tests/test.lua"])
+      assert.equals("hash111", marked_files["src/foo.lua"].hash)
+      assert.equals("hash222", marked_files["src/bar.lua"].hash)
+      assert.equals("hash333", marked_files["tests/test.lua"].hash)
+      -- Verify all files share the same commit hash
+      assert.equals("head_commit_sha", marked_files["src/foo.lua"].commit_hash)
+      assert.equals("head_commit_sha", marked_files["src/bar.lua"].commit_hash)
+      assert.equals("head_commit_sha", marked_files["tests/test.lua"].commit_hash)
     end)
 
     it("skips files that fail to get blob hash", function()
@@ -183,7 +198,7 @@ describe("diffview.review", function()
       local marked_files = {}
       local mock_store = { save_state = function() end }
       local mock_review_state = {
-        set_file_reviewed = function(_, path, hash)
+        set_file_reviewed = function(_, path, hash, commit_hash)
           marked_files[path] = hash
         end,
         store = mock_store,
@@ -212,6 +227,9 @@ describe("diffview.review", function()
       local mock_adapter = {
         file_blob_hash = function(_, path, rev)
           return blob_hashes[path]
+        end,
+        head_rev = function()
+          return { commit = "head_commit_sha" }
         end,
       }
       local mock_view = {
@@ -242,10 +260,11 @@ describe("diffview.review", function()
       }
 
       local mock_review_state = {
-        set_file_reviewed = function(_, path, hash, skip_save)
+        set_file_reviewed = function(_, path, hash, commit_hash, skip_save)
           table.insert(set_file_calls, {
             path = path,
             hash = hash,
+            commit_hash = commit_hash,
             skip_save = skip_save,
           })
         end,
@@ -277,6 +296,9 @@ describe("diffview.review", function()
         file_blob_hash = function(_, path)
           return blob_hashes[path]
         end,
+        head_rev = function()
+          return { commit = "head_commit_sha" }
+        end,
       }
       local mock_view = {
         review_state = mock_review_state,
@@ -290,9 +312,10 @@ describe("diffview.review", function()
       assert.equals(3, result)
       assert.equals(3, #set_file_calls)
 
-      -- Verify each call used skip_save=true
+      -- Verify each call used skip_save=true and has commit_hash
       for _, call in ipairs(set_file_calls) do
         assert.is_true(call.skip_save, "set_file_reviewed should be called with skip_save=true")
+        assert.equals("head_commit_sha", call.commit_hash, "set_file_reviewed should pass commit_hash")
       end
 
       -- Verify save_state was called exactly once (at the end)
@@ -332,6 +355,9 @@ describe("diffview.review", function()
       local mock_adapter = {
         file_blob_hash = function()
           return nil -- All blob hash lookups fail
+        end,
+        head_rev = function()
+          return { commit = "head_commit_sha" }
         end,
       }
       local mock_view = {
@@ -539,6 +565,9 @@ describe("diffview.review", function()
         file_blob_hash = function()
           return "blob_hash_123"
         end,
+        head_rev = function()
+          return { commit = "commit_sha_456" }
+        end,
       }
       local mock_view = { review_state = mock_review_state, adapter = mock_adapter }
       local file_entry = { path = "src/test.lua" }
@@ -551,6 +580,7 @@ describe("diffview.review", function()
       assert.equals(mock_view, captured_events[1].payload.view)
       assert.equals(file_entry, captured_events[1].payload.file_entry)
       assert.equals("blob_hash_123", captured_events[1].payload.blob_hash)
+      assert.equals("commit_sha_456", captured_events[1].payload.commit_hash)
     end)
 
     it("emits review_file_marked for each file when marking all reviewed", function()
@@ -584,6 +614,9 @@ describe("diffview.review", function()
         file_blob_hash = function(_, path)
           return blob_hashes[path]
         end,
+        head_rev = function()
+          return { commit = "commit_sha_all" }
+        end,
       }
       local mock_view = {
         review_state = mock_review_state,
@@ -605,6 +638,8 @@ describe("diffview.review", function()
       for _, event in ipairs(captured_events) do
         event_paths[event.payload.file_entry.path] = true
         event_hashes[event.payload.file_entry.path] = event.payload.blob_hash
+        -- Verify commit_hash is included in events
+        assert.equals("commit_sha_all", event.payload.commit_hash)
       end
       assert.is_true(event_paths["src/a.lua"])
       assert.is_true(event_paths["src/b.lua"])
@@ -656,7 +691,10 @@ describe("diffview.review", function()
 
       -- No blob hash - should fail
       local mock_review_state = { set_file_reviewed = function() end }
-      local mock_adapter = { file_blob_hash = function() return nil end }
+      local mock_adapter = {
+        file_blob_hash = function() return nil end,
+        head_rev = function() return { commit = "commit_sha" } end,
+      }
       local mock_view = { review_state = mock_review_state, adapter = mock_adapter }
       result = review.mark_file_reviewed(mock_view, { path = "test.lua" })
       assert.is_false(result)

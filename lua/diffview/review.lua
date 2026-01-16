@@ -23,6 +23,17 @@ local function get_file_blob_hash(view, file_entry)
   return view.adapter:file_blob_hash(file_entry.path, "HEAD")
 end
 
+---Get the current HEAD commit hash
+---@param view DiffView
+---@return string|nil commit_hash The HEAD commit SHA, or nil on error
+local function get_head_commit_hash(view)
+  local head_rev = view.adapter:head_rev()
+  if head_rev and head_rev.commit then
+    return head_rev.commit
+  end
+  return nil
+end
+
 ---Mark a file as reviewed
 ---@param view DiffView
 ---@param file_entry FileEntry
@@ -48,13 +59,15 @@ function M.mark_file_reviewed(view, file_entry)
     return false
   end
 
-  view.review_state:set_file_reviewed(file_entry.path, blob_hash)
+  local commit_hash = get_head_commit_hash(view)
+  view.review_state:set_file_reviewed(file_entry.path, blob_hash, commit_hash)
 
   -- Emit event for UI updates
   DiffviewGlobal.emitter:emit("review_file_marked", {
     view = view,
     file_entry = file_entry,
     blob_hash = blob_hash,
+    commit_hash = commit_hash,
   })
 
   return true
@@ -77,12 +90,15 @@ function M.mark_all_reviewed(view)
     return 0
   end
 
+  -- Get commit hash once for all files (they all share the same HEAD)
+  local commit_hash = get_head_commit_hash(view)
+
   local count = 0
   for _, file_entry in view.files:iter() do
     local blob_hash = get_file_blob_hash(view, file_entry)
     if blob_hash then
       -- Use skip_save=true to avoid saving on every file
-      view.review_state:set_file_reviewed(file_entry.path, blob_hash, true)
+      view.review_state:set_file_reviewed(file_entry.path, blob_hash, commit_hash, true)
       count = count + 1
 
       -- Emit event for each file
@@ -90,6 +106,7 @@ function M.mark_all_reviewed(view)
         view = view,
         file_entry = file_entry,
         blob_hash = blob_hash,
+        commit_hash = commit_hash,
       })
     end
   end

@@ -32,8 +32,8 @@ describe("review action listeners", function()
     local mock_review_state = nil
     if opts.review_enabled ~= false then
       mock_review_state = {
-        set_file_reviewed = function(_, path, hash, skip_save)
-          marked_files[path] = { hash = hash, skip_save = skip_save }
+        set_file_reviewed = function(_, path, hash, commit_hash, skip_save)
+          marked_files[path] = { hash = hash, commit_hash = commit_hash, skip_save = skip_save }
         end,
         clear_file = function(_, path)
           table.insert(cleared_files, path)
@@ -43,9 +43,13 @@ describe("review action listeners", function()
     end
 
     local blob_hashes = opts.blob_hashes or {}
+    local mock_commit_hash = opts.commit_hash or "abc123def456"
     local mock_adapter = {
       file_blob_hash = function(_, path, rev)
         return blob_hashes[path]
+      end,
+      head_rev = function()
+        return { commit = mock_commit_hash }
       end,
     }
 
@@ -142,6 +146,9 @@ describe("review action listeners", function()
         adapter = {
           file_blob_hash = function()
             return "abc123"
+          end,
+          head_rev = function()
+            return { commit = "abc123def456" }
           end,
         },
         files = { iter = function() return function() end end },
@@ -241,6 +248,9 @@ describe("review action listeners", function()
         adapter = {
           file_blob_hash = function(_, path)
             return "hash_" .. path
+          end,
+          head_rev = function()
+            return { commit = "abc123def456" }
           end,
         },
         files = {
