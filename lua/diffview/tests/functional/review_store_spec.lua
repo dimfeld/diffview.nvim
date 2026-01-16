@@ -106,6 +106,37 @@ describe("diffview.review_store", function()
         assert(entry.reviewed_at > 0, "Expected positive timestamp")
       end)
 
+      it("stores the commit hash when provided", function()
+        local state = ReviewState({
+          repo_id = "test-repo",
+          branch = "main",
+          store = store,
+        })
+
+        state:set_file_reviewed("src/bar.lua", "def456", "commit_sha_123")
+
+        local entry = state:get_file("src/bar.lua")
+        neq(nil, entry)
+        eq("def456", entry.blob_hash)
+        eq("commit_sha_123", entry.commit_hash)
+      end)
+
+      it("handles nil commit_hash for backward compatibility", function()
+        local state = ReviewState({
+          repo_id = "test-repo",
+          branch = "main",
+          store = store,
+        })
+
+        -- When commit_hash is not provided, it should be nil (backward compatible)
+        state:set_file_reviewed("src/bar.lua", "def456", nil)
+
+        local entry = state:get_file("src/bar.lua")
+        neq(nil, entry)
+        eq("def456", entry.blob_hash)
+        eq(nil, entry.commit_hash)
+      end)
+
       it("marks state as dirty", function()
         local state = ReviewState({
           repo_id = "test-repo",
@@ -367,6 +398,82 @@ describe("diffview.review_store", function()
         eq("test-repo", restored.repo_id)
         eq("main", restored.branch)
         eq("abc123", restored:get_file("src/foo.lua").blob_hash)
+      end)
+
+      it("serializes and deserializes commit_hash correctly", function()
+        local original = ReviewState({
+          repo_id = "test-repo",
+          branch = "main",
+          store = store,
+          files = {
+            ["src/foo.lua"] = { blob_hash = "abc123", reviewed_at = 1705276800, commit_hash = "commit_sha_789" },
+            ["src/bar.lua"] = { blob_hash = "def456", reviewed_at = 1705276801, commit_hash = "commit_sha_789" },
+          },
+        })
+
+        local data = original:to_table()
+        eq("commit_sha_789", data.files["src/foo.lua"].commit_hash)
+
+        local restored = ReviewState.from_table(data, store)
+        eq("commit_sha_789", restored:get_file("src/foo.lua").commit_hash)
+        eq("commit_sha_789", restored:get_file("src/bar.lua").commit_hash)
+      end)
+
+      it("roundtrips commit_hash through JSON encoding", function()
+        local original = ReviewState({
+          repo_id = "test-repo-json",
+          branch = "main",
+          store = store,
+          files = {
+            ["path/to/file.lua"] = { blob_hash = "deadbeef", reviewed_at = 1234567890, commit_hash = "commit_abc123" },
+          },
+        })
+
+        local json_str = vim.json.encode(original:to_table())
+        local decoded = vim.json.decode(json_str)
+        local restored = ReviewState.from_table(decoded, store)
+
+        eq("commit_abc123", restored:get_file("path/to/file.lua").commit_hash)
+      end)
+
+      it("handles legacy entries without commit_hash (backward compatibility)", function()
+        -- Simulates loading old data saved before commit_hash feature was added
+        local data = {
+          version = 1,
+          repo_id = "test-repo",
+          branch = "main",
+          files = {
+            -- Legacy entry without commit_hash field
+            ["src/legacy.lua"] = { blob_hash = "legacy_hash", reviewed_at = 1705276800 },
+          },
+        }
+        local restored = ReviewState.from_table(data, store)
+
+        local entry = restored:get_file("src/legacy.lua")
+        neq(nil, entry)
+        eq("legacy_hash", entry.blob_hash)
+        eq(1705276800, entry.reviewed_at)
+        eq(nil, entry.commit_hash) -- Should be nil for legacy entries
+      end)
+
+      it("handles mixed entries with and without commit_hash", function()
+        -- Simulates data where some entries have commit_hash and some don't
+        local data = {
+          version = 1,
+          repo_id = "test-repo",
+          branch = "main",
+          files = {
+            ["src/old.lua"] = { blob_hash = "old_hash", reviewed_at = 1705276800 },
+            ["src/new.lua"] = { blob_hash = "new_hash", reviewed_at = 1705276801, commit_hash = "commit_xyz" },
+          },
+        }
+        local restored = ReviewState.from_table(data, store)
+
+        local old_entry = restored:get_file("src/old.lua")
+        local new_entry = restored:get_file("src/new.lua")
+
+        eq(nil, old_entry.commit_hash) -- No commit_hash
+        eq("commit_xyz", new_entry.commit_hash) -- Has commit_hash
       end)
     end)
 

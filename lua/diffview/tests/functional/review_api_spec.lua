@@ -102,6 +102,56 @@ describe("diffview.review", function()
       assert.equals("blob_hash_123", marked_hash)
       assert.equals("commit_sha_456", marked_commit)
     end)
+
+    it("stores nil commit_hash when head_rev returns nil", function()
+      config._config = { review = { enabled = true } }
+
+      local marked_commit = "not_set"
+      local mock_review_state = {
+        set_file_reviewed = function(_, path, hash, commit_hash)
+          marked_commit = commit_hash
+        end,
+      }
+      local mock_adapter = {
+        file_blob_hash = function()
+          return "blob_hash_123"
+        end,
+        head_rev = function()
+          return nil -- Simulates edge case where head_rev fails
+        end,
+      }
+      local mock_view = { review_state = mock_review_state, adapter = mock_adapter }
+      local file_entry = { path = "src/test.lua" }
+
+      local result = review.mark_file_reviewed(mock_view, file_entry)
+      assert.is_true(result) -- Should still succeed with nil commit_hash
+      assert.is_nil(marked_commit) -- commit_hash should be nil
+    end)
+
+    it("stores nil commit_hash when head_rev.commit is nil", function()
+      config._config = { review = { enabled = true } }
+
+      local marked_commit = "not_set"
+      local mock_review_state = {
+        set_file_reviewed = function(_, path, hash, commit_hash)
+          marked_commit = commit_hash
+        end,
+      }
+      local mock_adapter = {
+        file_blob_hash = function()
+          return "blob_hash_123"
+        end,
+        head_rev = function()
+          return { commit = nil } -- Rev object without commit field
+        end,
+      }
+      local mock_view = { review_state = mock_review_state, adapter = mock_adapter }
+      local file_entry = { path = "src/test.lua" }
+
+      local result = review.mark_file_reviewed(mock_view, file_entry)
+      assert.is_true(result) -- Should still succeed with nil commit_hash
+      assert.is_nil(marked_commit) -- commit_hash should be nil
+    end)
   end)
 
   describe("mark_all_reviewed()", function()
@@ -372,6 +422,59 @@ describe("diffview.review", function()
       assert.equals(0, result)
       -- save_state should NOT be called since count is 0
       assert.equals(0, save_state_calls, "save_state should not be called when no files are marked")
+    end)
+
+    it("handles nil commit_hash when head_rev returns nil", function()
+      config._config = { review = { enabled = true } }
+
+      local marked_commits = {}
+      local mock_store = { save_state = function() end }
+      local mock_review_state = {
+        set_file_reviewed = function(_, path, hash, commit_hash)
+          marked_commits[path] = commit_hash
+        end,
+        store = mock_store,
+      }
+      local file_entries = {
+        { path = "src/foo.lua" },
+        { path = "src/bar.lua" },
+      }
+      local blob_hashes = {
+        ["src/foo.lua"] = "hash111",
+        ["src/bar.lua"] = "hash222",
+      }
+      local mock_files = {
+        iter = function()
+          local idx = 0
+          return function()
+            idx = idx + 1
+            if idx <= #file_entries then
+              return idx, file_entries[idx]
+            end
+          end
+        end,
+      }
+      local mock_adapter = {
+        file_blob_hash = function(_, path)
+          return blob_hashes[path]
+        end,
+        head_rev = function()
+          return nil -- Simulates edge case where head_rev fails
+        end,
+      }
+      local mock_view = {
+        review_state = mock_review_state,
+        adapter = mock_adapter,
+        files = mock_files,
+      }
+
+      local result = review.mark_all_reviewed(mock_view)
+
+      -- Files should still be marked even with nil commit_hash
+      assert.equals(2, result)
+      -- Both should have nil commit_hash
+      assert.is_nil(marked_commits["src/foo.lua"])
+      assert.is_nil(marked_commits["src/bar.lua"])
     end)
   end)
 
