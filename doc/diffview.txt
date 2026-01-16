@@ -730,6 +730,17 @@ review                                          *diffview-config-review*
                   },
                 }
 <
+        Default Review Keymaps: ~
+            Keymaps for review actions are available in both the diff view
+            and file panel contexts.
+
+            `]r` / `[r`      Jump to next/previous file pending review
+            `]R` / `[R`      Jump to next/previous unreviewed file
+            `<leader>rf`     Toggle review filter (show only pending)
+            `<leader>rs`     Toggle since-review diff mode
+            `<leader>rm`     Mark current file as reviewed
+            `<leader>rM`     Mark all files as reviewed
+            `<leader>rc`     Clear review status for current file
 
 hooks                                           *diffview-config-hooks*
         Type: `table<string, function>`, Default: `{}`

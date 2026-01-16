@@ -155,6 +155,22 @@ is being shown instead.
 (`<leader>rs`) for an efficient re-review workflow. The filter shows only files
 needing attention, and since-review mode shows only the new changes in those files.
 
+### Marking Files as Reviewed
+
+As you work through a PR, you can mark files as reviewed to track your progress:
+
+- `<leader>rm` - Mark the current file as reviewed
+- `<leader>rM` - Mark all files as reviewed
+- `<leader>rc` - Clear the review status for the current file
+
+When you mark a file as reviewed, the plugin records the file's current blob hash.
+If the file changes later (e.g., after the author pushes updates), it will show
+as "changed" (half-filled circle) instead of "reviewed" (filled circle), indicating
+you need to re-review it.
+
+The review state persists across Neovim sessions, stored in
+`~/.cache/diffview.nvim/reviews/` by default.
+
 ## Inspecting Diffs for Stashes
 
 The latest Git stash is always stored in the reference `refs/stash`. We can
