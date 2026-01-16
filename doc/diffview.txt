@@ -1255,6 +1255,26 @@ review_mark_file                                *diffview-actions-review_mark_fi
         Jump to the previous unreviewed file. See
         |diffview-actions-review_next_unreviewed| for details.
 
+review_toggle_filter                            *diffview-actions-review_toggle_filter*
+        Contexts: `diff_view`, `file_panel`
+
+        Toggle the file panel filter to show only files pending review. When
+        enabled, the file panel shows only files with status "unreviewed" or
+        "changed", hiding files that have been reviewed and haven't changed.
+
+        This is useful when re-reviewing a PR after updates - you can quickly
+        filter to see only the files that need attention.
+
+        When the filter is toggled, an info message shows the current state
+        and the number of pending files (e.g., "Review filter ON: 3 files
+        pending").
+
+        The filter works with both list and tree listing styles. In tree
+        view, empty directories (those with no visible children after
+        filtering) are automatically hidden.
+
+        Only available when review tracking is enabled.
+
 scroll_view({distance})                         *diffview-actions-scroll_view*
         Contexts: `panel`
 
@@ -1371,6 +1391,7 @@ actions:
         • |diffview-actions-review_clear_file|
         • |diffview-actions-review_mark_all|
         • |diffview-actions-review_mark_file|
+        • |diffview-actions-review_toggle_filter|
         • |diffview-actions-view_windo|
 
 ==============================================================================

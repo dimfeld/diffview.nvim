@@ -103,6 +103,25 @@ but have since changed.
 Position feedback is shown when navigating, such as "Pending review [2/5]" or
 "Unreviewed [1/3]".
 
+### Filtering the File Panel
+
+When re-reviewing a PR after updates, you often only care about files that need
+attention. You can filter the file panel to show only pending files:
+
+- `<leader>rf` - Toggle the review filter
+
+When the filter is enabled:
+- Only files with "unreviewed" or "changed" status are shown
+- Reviewed files that haven't changed are hidden
+- In tree view, empty directories are automatically hidden
+- An info message shows the filter state and pending file count
+
+This is particularly useful for large PRs where you've already reviewed most
+files and want to focus on what's new or changed.
+
+The filter works alongside the navigation commands - when filtering is on,
+navigation will only move between the visible (pending) files.
+
 ## Inspecting Diffs for Stashes
 
 The latest Git stash is always stored in the reference `refs/stash`. We can
