@@ -16,7 +16,7 @@ references:
 planGeneratedAt: 2026-01-16T02:05:48.392Z
 promptsGeneratedAt: 2026-01-16T02:05:48.392Z
 createdAt: 2026-01-15T00:26:26.637Z
-updatedAt: 2026-01-16T02:29:02.114Z
+updatedAt: 2026-01-16T02:41:20.379Z
 tasks:
   - title: Extend ReviewEntry to store commit hash
     done: true
@@ -45,17 +45,17 @@ tasks:
       with status unreviewed or changed. Also filter in update_components() to
       hide filtered files from tree view.
   - title: Hide empty directories in tree view when filter active
-    done: false
+    done: true
     description: When review filter is active in tree view mode, modify component
       creation to skip directories where all children are filtered out. May
       require modifying FileTree or the component schema generation.
   - title: Update panel rendering to show filter state
-    done: false
+    done: true
     description: "Modify render.lua to show filter indicator in panel header when
       filter is active (e.g., [Pending: 5/12]). Update section counts to show
       filtered vs total counts."
   - title: Handle edge cases for filter toggle
-    done: false
+    done: true
     description: When filter is toggled on and current file is filtered out, move to
       first visible file. When all files are marked reviewed with filter on,
       auto-disable the filter. Show message when filter results in empty list.
@@ -844,9 +844,12 @@ Add section explaining:
 
 ## Current Progress
 ### Current State
-- File panel filtering core functionality implemented (Tasks 1-5 complete)
+- File panel filtering feature fully implemented (Tasks 1-8 complete)
 - Filter toggle works in both list and tree view modes
 - Empty directories are hidden when all children are filtered out
+- Panel header shows `[Pending: X/Y]` indicator when filter is active
+- Section headers show `(visible/total)` format when filter is active
+- Auto-disables filter when all files are reviewed
 
 ### Completed (So Far)
 - Task 1: Added `commit_hash` optional field to ReviewEntry in review_store.lua
@@ -854,19 +857,23 @@ Add section explaining:
 - Task 3: Added `review_filter_enabled` state to DiffView with `toggle_review_filter()` method
 - Task 4: Added `review_toggle_filter` action and `<leader>rf` keybinding in both view and file_panel sections
 - Task 5: Implemented file panel filtering in `ordered_file_list()` and `update_components()`, including tree view filtering via `file_filter` parameter to `create_comp_schema()`
+- Task 6: Hide empty directories in tree view (completed as part of Task 5)
+- Task 7: Added filter indicator `[Pending: X/Y]` in panel header and `(visible/total)` format in section headers via render.lua helpers
+- Task 8: Added auto-disable filter when all files reviewed (both on toggle and when marking last pending file), cursor handling for filtered-out files
 - Event payloads (review_file_marked) now include commit_hash
-- Added 17 new tests for filtering in review_filter_spec.lua (237 total tests pass)
+- 22 tests for filtering in review_filter_spec.lua (242 total tests pass)
 
 ### Remaining
-- Tasks 6-8: Remaining file panel filtering polish (hide empty dirs already done in Task 5, need render state indicator and edge cases)
 - Tasks 9-13: Since-review diff mode implementation
 - Tasks 14-16: Additional tests and documentation
 
 ### Next Iteration Guidance
-- Task 6 (hide empty directories) was completed as part of Task 5 implementation
-- Task 7 adds visual filter indicator in panel header (e.g., [Pending: 5/12])
-- Task 8 handles edge cases (auto-disable filter when all reviewed, show message for empty list)
-- Tasks 9-13 implement the since-review diff mode
+- Tasks 9-13 implement the since-review diff mode:
+  - Task 9: Add `since_review_mode` state to DiffView
+  - Task 10: Add `review_toggle_since_review` action and `<leader>rs` keybinding
+  - Task 11: Implement alternate left revision when since_review_mode is true for changed files
+  - Task 12: Add commit existence verification for graceful fallback
+  - Task 13: Add visual indicator when viewing since-review diff
 
 ### Decisions / Changes
 - commit_hash is optional in ReviewEntry for backward compatibility with existing saved state
@@ -876,6 +883,8 @@ Add section explaining:
 - has_visible_files() helper added to FileTree for checking if directory has visible children
 - toggle_review_filter() shows info message with filter state and file counts
 - Cursor automatically moves to first visible file when current file is filtered out
+- Auto-disable message is consistent: "All files reviewed - filter disabled" in both toggle and marking scenarios
+- render.lua has count_pending_files() and count_visible_section_files() helpers for filter indicator
 
 ### Risks / Blockers
 - None

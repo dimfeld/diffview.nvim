@@ -605,7 +605,7 @@ describe("review filter", function()
       -- Filter should have been auto-disabled
       eq(false, mock_view.review_filter_enabled)
       assert.is_true(#echo_messages > 0)
-      assert.is_truthy(string.find(echo_messages[1], "No files pending review"))
+      assert.is_truthy(string.find(echo_messages[1], "All files reviewed"))
 
       api.nvim_echo = orig_echo
     end)

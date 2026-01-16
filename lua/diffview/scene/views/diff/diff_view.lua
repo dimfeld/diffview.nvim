@@ -773,7 +773,7 @@ function DiffView:toggle_review_filter()
       self.panel:update_components()
       self.panel:render()
       self.panel:redraw()
-      api.nvim_echo({{ "No files pending review - filter disabled" }}, false, {})
+      api.nvim_echo({{ "All files reviewed - filter disabled" }}, false, {})
       return
     end
 
