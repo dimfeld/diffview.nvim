@@ -17,10 +17,10 @@ references:
 planGeneratedAt: 2026-01-16T09:19:08.889Z
 promptsGeneratedAt: 2026-01-16T09:19:08.889Z
 createdAt: 2026-01-15T01:45:15.566Z
-updatedAt: 2026-01-16T09:19:44.917Z
+updatedAt: 2026-01-16T09:31:48.682Z
 tasks:
   - title: Add action names to actions.lua
-    done: false
+    done: true
     description: >-
       Add "review_clear_all" and "review_clear_repo" to the action_names array
       in lua/diffview/actions.lua. These will be auto-generated as action
@@ -30,7 +30,7 @@ tasks:
       Location: Around line 635, in the action_names array, alongside other
       review actions.
   - title: Add branch clear listener with confirmation
-    done: false
+    done: true
     description: >-
       Add a listener for the review_clear_all event in
       lua/diffview/scene/views/diff/listeners.lua.
@@ -52,7 +52,7 @@ tasks:
 
       Location: After the review_clear_file listener (around line 341-345)
   - title: Add repository clear method to ReviewStore
-    done: false
+    done: true
     description: >-
       Add ReviewStore:clear_repo_state(repo_id) method to
       lua/diffview/review_store.lua.
@@ -75,7 +75,7 @@ tasks:
 
       Location: After the save_state method (around line 302)
   - title: Add repository clear wrapper to review.lua
-    done: false
+    done: true
     description: |-
       Add review.clear_repo_reviews(view) function to lua/diffview/review.lua.
 
@@ -88,7 +88,7 @@ tasks:
 
       Location: After clear_all_reviews function
   - title: Add repository clear event listener to DiffView
-    done: false
+    done: true
     description: >-
       Add listener for "review_repo_cleared" event in
       lua/diffview/scene/views/diff/diff_view.lua.
@@ -100,7 +100,7 @@ tasks:
 
       Location: After the review_all_cleared listener (around line 663)
   - title: Add repository clear listener with confirmation
-    done: false
+    done: true
     description: >-
       Add a listener for the review_clear_repo event in
       lua/diffview/scene/views/diff/listeners.lua.
@@ -176,6 +176,35 @@ tasks:
       - ReviewStore:clear_repo_state handles non-existent directory
       - review.clear_repo_reviews clears in-memory state
       - review.clear_repo_reviews emits review_repo_cleared event
+changedFiles:
+  - .rmfilter/config/rmplan.yml
+  - AGENTS.md
+  - CLAUDE.md
+  - README.md
+  - USAGE.md
+  - doc/diffview.txt
+  - doc/diffview_defaults.txt
+  - lua/diffview/actions.lua
+  - lua/diffview/config.lua
+  - lua/diffview/hl.lua
+  - lua/diffview/init.lua
+  - lua/diffview/review.lua
+  - lua/diffview/review_store.lua
+  - lua/diffview/scene/views/diff/diff_view.lua
+  - lua/diffview/scene/views/diff/file_panel.lua
+  - lua/diffview/scene/views/diff/listeners.lua
+  - lua/diffview/scene/views/diff/render.lua
+  - lua/diffview/tests/functional/git_adapter_spec.lua
+  - lua/diffview/tests/functional/render_review_indicator_spec.lua
+  - lua/diffview/tests/functional/review_actions_spec.lua
+  - lua/diffview/tests/functional/review_api_spec.lua
+  - lua/diffview/tests/functional/review_clear_spec.lua
+  - lua/diffview/tests/functional/review_filter_spec.lua
+  - lua/diffview/tests/functional/review_navigation_spec.lua
+  - lua/diffview/tests/functional/review_store_spec.lua
+  - lua/diffview/tests/functional/since_review_diff_spec.lua
+  - lua/diffview/ui/models/file_tree/file_tree.lua
+  - lua/diffview/vcs/adapters/git/init.lua
 tags: []
 ---
 
@@ -779,3 +808,36 @@ Add keymap documentation:
 3. **Why `<leader>rX`?** - "X" suggests "expunge" or "delete all" and is visually distinct from `C`. It's also an uncommon key for review operations, reducing accidental use.
 
 4. **Why show counts in confirmation?** - Gives user context about the impact of the action, helping prevent accidental clearing.
+
+## Current Progress
+### Current State
+- Core implementation of branch-level and repository-level review state clearing is complete
+- Actions, listeners, store methods, and event handling are all implemented and tested
+- Tests written and passing (17 new tests in review_clear_spec.lua)
+
+### Completed (So Far)
+- Task 1: Added `review_clear_all` and `review_clear_repo` action names to actions.lua
+- Task 2: Added `review_clear_all` listener with confirmation dialog in listeners.lua
+- Task 3: Added `ReviewStore:clear_repo_state(repo_id)` method in review_store.lua
+- Task 4: Added `review.clear_repo_reviews(view)` wrapper in review.lua
+- Task 5: Added `review_repo_cleared` event listener in diff_view.lua with proper cleanup
+- Task 6: Added `review_clear_repo` listener with confirmation dialog in listeners.lua
+
+### Remaining
+- Task 7: Add default keymaps to config.lua
+- Task 8: Add documentation to doc/diffview.txt
+- Task 9: Update doc/diffview_defaults.txt
+- Task 10: Update USAGE.md
+- Task 11: Write tests (partial - core tests done, may need additional coverage)
+
+### Next Iteration Guidance
+- Next batch should focus on Tasks 7-10 (keymaps and documentation)
+- All keymaps should be added to both `view` and `file_panel` sections
+- Documentation should follow existing patterns for review_* actions
+
+### Decisions / Changes
+- The `review_clear_repo` listener was implemented alongside Task 4 since they're closely related
+- Event listener cleanup is properly handled in DiffView:close()
+
+### Risks / Blockers
+- None
