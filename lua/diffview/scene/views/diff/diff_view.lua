@@ -285,19 +285,15 @@ DiffView._set_file = async.void(function(self, file)
     end
   end
 
+  -- When using since-review mode with a temporary entry, the temporary entry
+  -- will be garbage collected after use (layout files are transferred to cur_layout)
   await(self:use_entry(entry_to_use))
-
-  -- If we used a since-review entry, we need to clean it up after use
-  -- to avoid memory leaks (since it's a temporary entry)
-  if using_since_review and entry_to_use ~= file then
-    -- The layout files have been transferred to cur_layout, so we just
-    -- let the temporary entry go out of scope
-  end
 
   self.emitter:emit("file_open_post", file, cur_entry)
 
-  if not self.cur_entry.opened then
-    self.cur_entry.opened = true
+  -- Track opened state on the original file entry, not the temporary since-review entry
+  if not file.opened then
+    file.opened = true
     DiffviewGlobal.emitter:emit("file_open_new", file)
   end
 end)

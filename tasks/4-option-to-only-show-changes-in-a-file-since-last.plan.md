@@ -16,7 +16,7 @@ references:
 planGeneratedAt: 2026-01-16T02:05:48.392Z
 promptsGeneratedAt: 2026-01-16T02:05:48.392Z
 createdAt: 2026-01-15T00:26:26.637Z
-updatedAt: 2026-01-16T02:41:20.379Z
+updatedAt: 2026-01-16T02:58:00.495Z
 tasks:
   - title: Extend ReviewEntry to store commit hash
     done: true
@@ -60,41 +60,41 @@ tasks:
       first visible file. When all files are marked reviewed with filter on,
       auto-disable the filter. Show message when filter results in empty list.
   - title: Add since_review_mode state to DiffView
-    done: false
+    done: true
     description: Add since_review_mode boolean field to DiffView class. Add
       toggle_since_review_mode method that toggles state and re-opens current
       file if it has changed status.
   - title: Add review_toggle_since_review action and keybinding
-    done: false
+    done: true
     description: Add review_toggle_since_review to action_names in actions.lua. Add
       listener in listeners.lua. Add <leader>rs keybinding to both view and
       file_panel sections in config.lua.
   - title: Implement since-review diff mode file opening
-    done: false
+    done: true
     description: Modify _set_file or add wrapper in diff_view.lua to use alternate
       left revision when since_review_mode is true for changed files. Create
       GitRev with stored commit_hash. Requires understanding use_entry
       implementation.
   - title: Add commit existence verification
-    done: false
+    done: true
     description: Add verify_commit_exists helper method to DiffView that checks if
       stored commit hash still exists using git cat-file -e. Use this to
       gracefully fall back to full diff when commit is unavailable after
       force-push.
   - title: Add visual indicator for since-review mode
-    done: false
+    done: true
     description: "When viewing a file in since-review mode, show visual indicator.
       Options: echo message when opening file, indicator in panel current file
       line, or status line indicator. Choose most consistent with existing
       patterns."
   - title: Add tests for file panel filtering
-    done: false
+    done: true
     description: "Create review_filter_spec.lua with tests for: filter toggle
       behavior, filtered file list contents, navigation with filter active,
       cursor handling when file is filtered out, tree view filtering,
       auto-disable when all reviewed."
   - title: Add tests for since-review diff mode
-    done: false
+    done: true
     description: "Create since_review_diff_spec.lua with tests for: mode toggle,
       correct revision used for diff, fallback when commit unavailable, mode
       indicator display, interaction with filter."
@@ -128,6 +128,7 @@ changedFiles:
   - lua/diffview/tests/functional/review_filter_spec.lua
   - lua/diffview/tests/functional/review_navigation_spec.lua
   - lua/diffview/tests/functional/review_store_spec.lua
+  - lua/diffview/tests/functional/since_review_diff_spec.lua
   - lua/diffview/ui/models/file_tree/file_tree.lua
   - lua/diffview/vcs/adapters/git/init.lua
 tags: []
@@ -845,11 +846,8 @@ Add section explaining:
 ## Current Progress
 ### Current State
 - File panel filtering feature fully implemented (Tasks 1-8 complete)
-- Filter toggle works in both list and tree view modes
-- Empty directories are hidden when all children are filtered out
-- Panel header shows `[Pending: X/Y]` indicator when filter is active
-- Section headers show `(visible/total)` format when filter is active
-- Auto-disables filter when all files are reviewed
+- Since-review diff mode feature fully implemented (Tasks 9-13 complete)
+- All tests pass (269 total tests including 27 new since-review tests)
 
 ### Completed (So Far)
 - Task 1: Added `commit_hash` optional field to ReviewEntry in review_store.lua
@@ -860,20 +858,23 @@ Add section explaining:
 - Task 6: Hide empty directories in tree view (completed as part of Task 5)
 - Task 7: Added filter indicator `[Pending: X/Y]` in panel header and `(visible/total)` format in section headers via render.lua helpers
 - Task 8: Added auto-disable filter when all files reviewed (both on toggle and when marking last pending file), cursor handling for filtered-out files
-- Event payloads (review_file_marked) now include commit_hash
-- 22 tests for filtering in review_filter_spec.lua (242 total tests pass)
+- Task 9: Added `since_review_mode` boolean to DiffView with `toggle_since_review_mode()` method
+- Task 10: Added `review_toggle_since_review` action and `<leader>rs` keybinding in both view and file_panel sections
+- Task 11: Implemented since-review diff mode file opening with `_create_since_review_entry()` and `get_since_review_entry()` methods
+- Task 12: Added `verify_commit_exists()` method using `git cat-file -e` for graceful fallback when commit is unavailable
+- Task 13: Added visual indicator via `nvim_echo` showing `[Since review: abc1234]` when opening file in since-review mode
+- Task 14: Verified existing filter tests in review_filter_spec.lua (22 comprehensive tests)
+- Task 15: Created since_review_diff_spec.lua with 27 tests covering mode toggle, commit verification, fallback behavior, etc.
 
 ### Remaining
-- Tasks 9-13: Since-review diff mode implementation
-- Tasks 14-16: Additional tests and documentation
+- Task 16: Update documentation (doc/diffview.txt, USAGE.md)
 
 ### Next Iteration Guidance
-- Tasks 9-13 implement the since-review diff mode:
-  - Task 9: Add `since_review_mode` state to DiffView
-  - Task 10: Add `review_toggle_since_review` action and `<leader>rs` keybinding
-  - Task 11: Implement alternate left revision when since_review_mode is true for changed files
-  - Task 12: Add commit existence verification for graceful fallback
-  - Task 13: Add visual indicator when viewing since-review diff
+- Task 16 requires updating documentation with:
+  - New keybindings (`<leader>rs` for since-review toggle)
+  - New actions (`review_toggle_since_review`)
+  - Explanation of since-review diff mode
+  - Notes about commit availability after force-push
 
 ### Decisions / Changes
 - commit_hash is optional in ReviewEntry for backward compatibility with existing saved state
@@ -885,6 +886,9 @@ Add section explaining:
 - Cursor automatically moves to first visible file when current file is filtered out
 - Auto-disable message is consistent: "All files reviewed - filter disabled" in both toggle and marking scenarios
 - render.lua has count_pending_files() and count_visible_section_files() helpers for filter indicator
+- Since-review mode visual indicator uses `nvim_echo` for the `[Since review: abc1234]` message (consistent with other info messages)
+- Since-review entry is created as a temporary FileEntry with modified left revision; original file's `opened` flag is tracked correctly
+- Graceful fallback shows descriptive messages: "file not reviewed", "no commit stored", "reviewed commit no longer exists"
 
 ### Risks / Blockers
 - None
