@@ -122,6 +122,39 @@ files and want to focus on what's new or changed.
 The filter works alongside the navigation commands - when filtering is on,
 navigation will only move between the visible (pending) files.
 
+### Viewing Only Changes Since Last Review
+
+When re-reviewing a PR after updates, you may want to see only what changed since
+your last review rather than the full diff. The since-review diff mode provides
+this capability:
+
+- `<leader>rs` - Toggle since-review diff mode
+
+When since-review mode is enabled and you open a file that was previously reviewed
+but has since changed (shown with the "changed" status indicator), the diff will
+show:
+- **Left side**: The file as it was when you marked it reviewed
+- **Right side**: The current state of the file
+
+This lets you focus on just the new changes without re-reading the entire diff.
+
+When opening a file in since-review mode, an indicator message shows the commit
+hash being used as the reference point (e.g., `[Since review: abc1234]`).
+
+**Fallback behavior**: The since-review mode gracefully falls back to the full
+diff when:
+- The file has not been reviewed yet (no reference point exists)
+- The review was saved before commit tracking was added (legacy state)
+- The reviewed commit no longer exists (e.g., after a force-push that rewrote
+  history)
+
+In these cases, you'll see an informational message explaining why the full diff
+is being shown instead.
+
+**Tip**: Combine the review filter (`<leader>rf`) with since-review mode
+(`<leader>rs`) for an efficient re-review workflow. The filter shows only files
+needing attention, and since-review mode shows only the new changes in those files.
+
 ## Inspecting Diffs for Stashes
 
 The latest Git stash is always stored in the reference `refs/stash`. We can
