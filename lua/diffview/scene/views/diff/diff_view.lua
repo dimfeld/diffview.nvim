@@ -804,10 +804,113 @@ function DiffView:_navigate_review_file(delta, status_filter, label)
   return target_file
 end
 
+---Helper function to navigate to files matching a review status filter,
+---anchored to a specific file's position in the full list.
+---@param file_entry FileEntry
+---@param delta integer Direction to navigate (+1 for next, -1 for previous)
+---@param status_filter fun(status: string|nil): boolean Function to filter files by status
+---@param label string Label for the status message (e.g., "Pending review", "Unreviewed")
+---@return FileEntry|nil target_file The file navigated to, or nil if none found
+---@private
+function DiffView:_navigate_review_file_from_entry(file_entry, delta, status_filter, label)
+  self:ensure_layout()
+
+  if self:file_safeguard() then return nil end
+
+  if not self.review_state then
+    utils.info("Review mode is not enabled")
+    return nil
+  end
+
+  local files = self.panel:ordered_file_list()
+  if #files == 0 then return nil end
+
+  -- Build list of files matching the filter, preserving list order
+  local matching_files = {}
+  local matching_indices = {}
+  for i, file in ipairs(files) do
+    local status = review.get_file_status(self, file)
+    if status_filter(status) then
+      matching_files[#matching_files + 1] = file
+      matching_indices[#matching_files] = i
+    end
+  end
+
+  if #matching_files == 0 then
+    utils.info(("No %s files"):format(label:lower()))
+    return nil
+  end
+
+  local cur_idx = 0
+  if file_entry then
+    for i, file in ipairs(files) do
+      if file == file_entry then
+        cur_idx = i
+        break
+      end
+    end
+  end
+
+  local count = vim.v.count1
+  local target_match_idx
+
+  if cur_idx == 0 then
+    -- If the anchor file is not in the list, fall back to the first match in direction.
+    target_match_idx = delta > 0 and 1 or #matching_files
+  elseif delta > 0 then
+    local start_idx
+    for i, idx in ipairs(matching_indices) do
+      if idx > cur_idx then
+        start_idx = i
+        break
+      end
+    end
+
+    if not start_idx then start_idx = 1 end
+    target_match_idx = ((start_idx - 1 + (count - 1)) % #matching_files) + 1
+  else
+    local start_idx
+    for i = #matching_indices, 1, -1 do
+      if matching_indices[i] < cur_idx then
+        start_idx = i
+        break
+      end
+    end
+
+    if not start_idx then start_idx = #matching_files end
+    target_match_idx = ((start_idx - 1 - (count - 1)) % #matching_files) + 1
+  end
+
+  local target_file = matching_files[target_match_idx]
+
+  -- Navigate to the file
+  self.panel:set_cur_file(target_file)
+  self.panel:highlight_file(target_file)
+  self:_set_file(target_file)
+
+  -- Show position message
+  api.nvim_echo({ { ("%s [%d/%d]"):format(label, target_match_idx, #matching_files) } }, false, {})
+
+  return target_file
+end
+
 ---Navigate to the next file pending review (unreviewed or changed).
 ---@return FileEntry|nil
 function DiffView:next_pending_review_file()
-  return self:_navigate_review_file(
+  return self:_navigate_review_file_from_entry(
+    self.panel.cur_file,
+    1,
+    function(status) return status == "unreviewed" or status == "changed" end,
+    "Pending review"
+  )
+end
+
+---Navigate to the next file pending review after a given file in the list.
+---@param file_entry FileEntry
+---@return FileEntry|nil
+function DiffView:next_pending_review_file_from(file_entry)
+  return self:_navigate_review_file_from_entry(
+    file_entry,
     1,
     function(status) return status == "unreviewed" or status == "changed" end,
     "Pending review"
@@ -817,7 +920,20 @@ end
 ---Navigate to the previous file pending review (unreviewed or changed).
 ---@return FileEntry|nil
 function DiffView:prev_pending_review_file()
-  return self:_navigate_review_file(
+  return self:_navigate_review_file_from_entry(
+    self.panel.cur_file,
+    -1,
+    function(status) return status == "unreviewed" or status == "changed" end,
+    "Pending review"
+  )
+end
+
+---Navigate to the previous file pending review before a given file in the list.
+---@param file_entry FileEntry
+---@return FileEntry|nil
+function DiffView:prev_pending_review_file_from(file_entry)
+  return self:_navigate_review_file_from_entry(
+    file_entry,
     -1,
     function(status) return status == "unreviewed" or status == "changed" end,
     "Pending review"

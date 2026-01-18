@@ -346,7 +346,7 @@ return function(view)
       if advance == "next" then
         view:next_file(true)
       elseif advance == "next_pending" then
-        view:next_pending_review_file()
+        view:next_pending_review_file_from(file)
       end
     end,
     review_mark_all = function()

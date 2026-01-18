@@ -140,12 +140,14 @@ describe("review action listeners", function()
 
       local next_file_calls = 0
       local next_pending_calls = 0
+      local next_pending_args = {}
 
       mock_view.next_file = function()
         next_file_calls = next_file_calls + 1
       end
-      mock_view.next_pending_review_file = function()
+      mock_view.next_pending_review_file_from = function(_, file)
         next_pending_calls = next_pending_calls + 1
+        table.insert(next_pending_args, file)
       end
 
       local listeners = listeners_module(mock_view)
@@ -153,6 +155,7 @@ describe("review action listeners", function()
 
       eq(0, next_file_calls)
       eq(1, next_pending_calls)
+      eq(file_entry, next_pending_args[1])
     end)
 
     it("does nothing when no file is selected", function()

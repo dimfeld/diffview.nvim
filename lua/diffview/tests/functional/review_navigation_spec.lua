@@ -157,8 +157,11 @@ describe("review navigation", function()
 
     -- Add the navigation methods from DiffView prototype
     mock_view._navigate_review_file = DiffView._navigate_review_file
+    mock_view._navigate_review_file_from_entry = DiffView._navigate_review_file_from_entry
     mock_view.next_pending_review_file = DiffView.next_pending_review_file
+    mock_view.next_pending_review_file_from = DiffView.next_pending_review_file_from
     mock_view.prev_pending_review_file = DiffView.prev_pending_review_file
+    mock_view.prev_pending_review_file_from = DiffView.prev_pending_review_file_from
     mock_view.next_unreviewed_file = DiffView.next_unreviewed_file
     mock_view.prev_unreviewed_file = DiffView.prev_unreviewed_file
 
@@ -287,6 +290,140 @@ describe("review navigation", function()
 
       eq(1, #mock_view._test_echo_messages)
       eq("Pending review [1/2]", mock_view._test_echo_messages[1])
+
+      cleanup()
+    end)
+  end)
+
+  describe("next_pending_review_file_from", function()
+    it("navigates to the next pending file after the given file", function()
+      config._config = { review = { enabled = true } }
+
+      local files = {
+        create_file_entry("src/first.lua"),
+        create_file_entry("src/pending.lua"),
+        create_file_entry("src/current.lua"),
+        create_file_entry("src/next_pending.lua"),
+      }
+
+      local mock_view = create_mock_view({
+        files = files,
+        cur_file = files[3],
+        file_statuses = {
+          ["src/first.lua"] = "reviewed",
+          ["src/pending.lua"] = "unreviewed",
+          ["src/current.lua"] = "reviewed",
+          ["src/next_pending.lua"] = "changed",
+        },
+      })
+
+      local cleanup = add_navigation_methods(mock_view)
+      set_count(1)
+
+      local result = mock_view:next_pending_review_file_from(files[3])
+
+      eq(files[4], result)
+      eq(files[4], mock_view.panel._set_cur_file_called)
+      eq(files[4], mock_view.panel._highlighted_file)
+      eq(files[4], mock_view._test_set_file_calls[1])
+
+      cleanup()
+    end)
+
+    it("wraps to the first pending file when none remain after the given file", function()
+      config._config = { review = { enabled = true } }
+
+      local files = {
+        create_file_entry("src/pending_first.lua"),
+        create_file_entry("src/reviewed.lua"),
+        create_file_entry("src/current.lua"),
+      }
+
+      local mock_view = create_mock_view({
+        files = files,
+        cur_file = files[3],
+        file_statuses = {
+          ["src/pending_first.lua"] = "unreviewed",
+          ["src/reviewed.lua"] = "reviewed",
+          ["src/current.lua"] = "reviewed",
+        },
+      })
+
+      local cleanup = add_navigation_methods(mock_view)
+      set_count(1)
+
+      local result = mock_view:next_pending_review_file_from(files[3])
+
+      eq(files[1], result)
+      eq(files[1], mock_view.panel._set_cur_file_called)
+      eq(files[1], mock_view.panel._highlighted_file)
+      eq(files[1], mock_view._test_set_file_calls[1])
+
+      cleanup()
+    end)
+  end)
+
+  describe("prev_pending_review_file_from", function()
+    it("navigates to the previous pending file before the given file", function()
+      config._config = { review = { enabled = true } }
+
+      local files = {
+        create_file_entry("src/prev_pending.lua"),
+        create_file_entry("src/current.lua"),
+        create_file_entry("src/pending_after.lua"),
+      }
+
+      local mock_view = create_mock_view({
+        files = files,
+        cur_file = files[2],
+        file_statuses = {
+          ["src/prev_pending.lua"] = "changed",
+          ["src/current.lua"] = "reviewed",
+          ["src/pending_after.lua"] = "unreviewed",
+        },
+      })
+
+      local cleanup = add_navigation_methods(mock_view)
+      set_count(1)
+
+      local result = mock_view:prev_pending_review_file_from(files[2])
+
+      eq(files[1], result)
+      eq(files[1], mock_view.panel._set_cur_file_called)
+      eq(files[1], mock_view.panel._highlighted_file)
+      eq(files[1], mock_view._test_set_file_calls[1])
+
+      cleanup()
+    end)
+
+    it("wraps to the last pending file when none remain before the given file", function()
+      config._config = { review = { enabled = true } }
+
+      local files = {
+        create_file_entry("src/current.lua"),
+        create_file_entry("src/reviewed.lua"),
+        create_file_entry("src/last_pending.lua"),
+      }
+
+      local mock_view = create_mock_view({
+        files = files,
+        cur_file = files[1],
+        file_statuses = {
+          ["src/current.lua"] = "reviewed",
+          ["src/reviewed.lua"] = "reviewed",
+          ["src/last_pending.lua"] = "unreviewed",
+        },
+      })
+
+      local cleanup = add_navigation_methods(mock_view)
+      set_count(1)
+
+      local result = mock_view:prev_pending_review_file_from(files[1])
+
+      eq(files[3], result)
+      eq(files[3], mock_view.panel._set_cur_file_called)
+      eq(files[3], mock_view.panel._highlighted_file)
+      eq(files[3], mock_view._test_set_file_calls[1])
 
       cleanup()
     end)
@@ -822,8 +959,8 @@ describe("review navigation", function()
 
       local result = mock_view:prev_pending_review_file()
 
-      -- Should go to last pending file
-      eq(files[3], result)
+      -- Should go to previous pending file before the current file
+      eq(files[1], result)
 
       cleanup()
     end)
