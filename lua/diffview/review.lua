@@ -211,6 +211,7 @@ function M.clear_repo_reviews(view)
 end
 
 ---Get the review status of a file
+---Uses the view's cached status when available for performance.
 ---@param view DiffView
 ---@param file_entry FileEntry
 ---@return "unreviewed"|"reviewed"|"changed"|nil status The review status, or nil if review is disabled
@@ -227,6 +228,12 @@ function M.get_file_status(view, file_entry)
     return nil
   end
 
+  -- Use the view's cached status method if available (DiffView has it)
+  if view.get_cached_review_status then
+    return view:get_cached_review_status(file_entry)
+  end
+
+  -- Fall back to direct lookup (expensive - spawns a git process per file)
   local current_blob_hash = get_file_blob_hash(view, file_entry)
   return view.review_state:get_file_status(file_entry.path, current_blob_hash)
 end

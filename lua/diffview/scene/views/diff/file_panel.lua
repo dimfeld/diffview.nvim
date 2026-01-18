@@ -199,6 +199,7 @@ function FilePanel:update_components()
 end
 
 ---Check if a file should be visible based on review filter state.
+---Uses cached review status for performance.
 ---@param file FileEntry
 ---@return boolean
 function FilePanel:should_show_file(file)
@@ -206,7 +207,15 @@ function FilePanel:should_show_file(file)
     return true
   end
 
-  local status = review.get_file_status(self.view, file)
+  -- Use the view's cached status method if available (DiffView has it)
+  -- This avoids spawning git processes per file during filtering
+  local status
+  if self.view.get_cached_review_status then
+    status = self.view:get_cached_review_status(file)
+  else
+    -- Fall back to direct lookup (expensive)
+    status = review.get_file_status(self.view, file)
+  end
   return status == "unreviewed" or status == "changed"
 end
 

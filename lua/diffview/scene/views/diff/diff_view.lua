@@ -54,6 +54,9 @@ local M = {}
 ---@field review_event_callbacks? table<string, function> # Callbacks for review event cleanup.
 ---@field review_filter_enabled boolean # Whether to filter panel to show only pending review files.
 ---@field since_review_mode boolean # Whether to show only changes since last review for "changed" files.
+---@field review_status_cache? table<string, "unreviewed"|"reviewed"|"changed"> # Cached review statuses by path.
+---@field review_status_cache_head? string # HEAD commit hash used to compute the cache.
+---@field review_status_cache_valid boolean # Whether the cache is valid and can be used.
 local DiffView = oop.create_class("DiffView", StandardView.__get())
 
 ---DiffView constructor
@@ -69,6 +72,9 @@ function DiffView:init(opt)
   self.options = opt.options or {}
   self.review_filter_enabled = false
   self.since_review_mode = false
+  self.review_status_cache = nil
+  self.review_status_cache_head = nil
+  self.review_status_cache_valid = false
   self.options.selected_file = self.options.selected_file
     and pl:chain(self.options.selected_file):absolute():relative(self.adapter.ctx.toplevel):get()
 
@@ -571,6 +577,9 @@ DiffView.update_files = debounce.debounce_trailing(
 
     perf:lap("updated file list")
 
+    -- Invalidate review status cache since file list changed
+    self:invalidate_review_status_cache("files_updated")
+
     self.merge_ctx = next(new_files.conflicting) and self.adapter:get_merge_context() or nil
 
     if self.merge_ctx then
@@ -657,6 +666,8 @@ function DiffView:init_review_event_listeners()
 
   self.review_event_callbacks.file_marked = function(_, payload)
     if payload.view == self then
+      -- Invalidate cache when a file is marked
+      self:invalidate_review_status_cache("file_marked")
       refresh_panel()
 
       -- Auto-disable filter when all files are marked reviewed
@@ -674,11 +685,17 @@ function DiffView:init_review_event_listeners()
   end
 
   self.review_event_callbacks.file_cleared = function(_, payload)
-    if payload.view == self then refresh_panel() end
+    if payload.view == self then
+      -- Invalidate cache when a file review is cleared
+      self:invalidate_review_status_cache("file_cleared")
+      refresh_panel()
+    end
   end
 
   self.review_event_callbacks.all_cleared = function(_, payload)
     if payload.view == self then
+      -- Invalidate cache when all reviews are cleared
+      self:invalidate_review_status_cache("all_cleared")
       -- Disable review filter if active since there's nothing to filter
       if self.review_filter_enabled then self.review_filter_enabled = false end
       refresh_panel()
@@ -687,6 +704,8 @@ function DiffView:init_review_event_listeners()
 
   self.review_event_callbacks.repo_cleared = function(_, payload)
     if payload.view == self then
+      -- Invalidate cache when repo reviews are cleared
+      self:invalidate_review_status_cache("repo_cleared")
       -- Disable review filter if active since there's nothing to filter
       if self.review_filter_enabled then self.review_filter_enabled = false end
       refresh_panel()
@@ -723,6 +742,7 @@ end
 function DiffView:is_valid() return self.valid end
 
 ---Get the review status for a file entry.
+---Uses the cached status if available and valid, otherwise falls back to direct lookup.
 ---@param file_entry FileEntry
 ---@return "unreviewed"|"reviewed"|"changed"|nil status The review status, or nil if review is disabled
 function DiffView:get_file_review_status(file_entry)
@@ -730,18 +750,140 @@ function DiffView:get_file_review_status(file_entry)
 
   if not file_entry or not file_entry.path then return nil end
 
-  -- Get the current blob hash to compare against the stored hash
+  -- Try to use cached status first
+  if self.review_status_cache_valid and self.review_status_cache then
+    local cached = self.review_status_cache[file_entry.path]
+    if cached then
+      return cached
+    end
+    -- Path not in cache could mean it's a new file, fall through to direct lookup
+    -- Log this to help detect cases where per-file git lookups occur despite caching
+    logger:lvl(5):debug(
+      "[DiffView] Review status cache miss for path not in cache: " .. file_entry.path
+    )
+  end
+
+  -- Fall back to direct lookup (expensive - spawns a git process)
+  -- This should be rare when caching is working correctly
+  logger:lvl(5):debug("[DiffView] Fallback to per-file git lookup for: " .. file_entry.path)
   local current_blob_hash = self.adapter:file_blob_hash(file_entry.path, "HEAD")
   return self.review_state:get_file_status(file_entry.path, current_blob_hash)
+end
+
+---Invalidate the review status cache.
+---Call this when review state changes, file list changes, or HEAD changes.
+---@param reason? string Optional reason for logging
+function DiffView:invalidate_review_status_cache(reason)
+  self.review_status_cache_valid = false
+  if reason then
+    logger:lvl(5):debug("[DiffView] Review status cache invalidated: " .. reason)
+  end
+end
+
+---Rebuild the review status cache for all files in the view.
+---Uses batch blob-hash lookups and commit_hash short-circuiting for performance.
+---This should be called once per render/navigation cycle, not per-file.
+function DiffView:rebuild_review_status_cache()
+  if not self.review_state then
+    self.review_status_cache = nil
+    self.review_status_cache_head = nil
+    self.review_status_cache_valid = false
+    return
+  end
+
+  -- Get current HEAD commit
+  local head_rev = self.adapter:head_rev()
+  local head_commit = head_rev and head_rev.commit or nil
+
+  -- Initialize cache
+  self.review_status_cache = {}
+  self.review_status_cache_head = head_commit
+
+  -- Collect all file paths that need status computation
+  local all_paths = {}
+  local paths_needing_blob_hash = {}
+
+  for _, file in self.files:iter() do
+    if file.path then
+      all_paths[#all_paths + 1] = file.path
+    end
+  end
+
+  -- First pass: use commit_hash short-circuit for reviewed files
+  -- If ReviewEntry.commit_hash == current HEAD, treat as "reviewed" without blob lookup
+  for _, path in ipairs(all_paths) do
+    local entry = self.review_state:get_file(path)
+    if not entry then
+      -- No review entry - unreviewed
+      self.review_status_cache[path] = "unreviewed"
+    elseif head_commit and entry.commit_hash and entry.commit_hash == head_commit then
+      -- Commit hash matches current HEAD - reviewed (short-circuit!)
+      self.review_status_cache[path] = "reviewed"
+    else
+      -- Need to compare blob hashes
+      paths_needing_blob_hash[#paths_needing_blob_hash + 1] = path
+    end
+  end
+
+  -- Second pass: batch fetch blob hashes for files that need comparison
+  if #paths_needing_blob_hash > 0 then
+    local blob_hashes = {}
+
+    -- Use batch lookup if adapter supports it (GitAdapter does)
+    if self.adapter.file_blob_hashes_batch then
+      blob_hashes = self.adapter:file_blob_hashes_batch(paths_needing_blob_hash, "HEAD")
+    else
+      -- Fallback to per-file lookup (should not happen for GitAdapter)
+      for _, path in ipairs(paths_needing_blob_hash) do
+        blob_hashes[path] = self.adapter:file_blob_hash(path, "HEAD")
+      end
+    end
+
+    -- Compute status for each path needing blob comparison
+    for _, path in ipairs(paths_needing_blob_hash) do
+      local current_blob_hash = blob_hashes[path]
+      self.review_status_cache[path] = self.review_state:get_file_status(path, current_blob_hash)
+    end
+  end
+
+  self.review_status_cache_valid = true
+  logger:lvl(5):debug(
+    "[DiffView] Review status cache rebuilt: "
+    .. #all_paths .. " files, "
+    .. (#all_paths - #paths_needing_blob_hash) .. " short-circuited, "
+    .. #paths_needing_blob_hash .. " needed blob lookup"
+  )
+end
+
+---Ensure the review status cache is valid, rebuilding if necessary.
+---Call this before accessing cached statuses in bulk operations.
+function DiffView:ensure_review_status_cache()
+  if not self.review_status_cache_valid then
+    self:rebuild_review_status_cache()
+  end
+end
+
+---Get a cached review status, ensuring cache is valid.
+---This is the primary interface for getting review status efficiently.
+---@param file_entry FileEntry
+---@return "unreviewed"|"reviewed"|"changed"|nil status
+function DiffView:get_cached_review_status(file_entry)
+  if not self.review_state then return nil end
+  if not file_entry or not file_entry.path then return nil end
+
+  self:ensure_review_status_cache()
+
+  return self.review_status_cache and self.review_status_cache[file_entry.path]
 end
 
 ---Helper function to navigate to files matching a review status filter.
 ---@param delta integer Direction to navigate (+1 for next, -1 for previous)
 ---@param status_filter fun(status: string|nil): boolean Function to filter files by status
 ---@param label string Label for the status message (e.g., "Pending review", "Unreviewed")
+---@param skip_filter_when_panel_filtered? boolean If true and review_filter_enabled, skip status filtering (panel already filtered)
 ---@return FileEntry|nil target_file The file navigated to, or nil if none found
 ---@private
-function DiffView:_navigate_review_file(delta, status_filter, label)
+function DiffView:_navigate_review_file(delta, status_filter, label, skip_filter_when_panel_filtered)
   self:ensure_layout()
 
   if self:file_safeguard() then return nil end
@@ -751,14 +893,28 @@ function DiffView:_navigate_review_file(delta, status_filter, label)
     return nil
   end
 
+  -- Ensure cache is valid before any status lookups
+  self:ensure_review_status_cache()
+
   local files = self.panel:ordered_file_list()
   if #files == 0 then return nil end
 
   -- Build list of files matching the filter
-  local matching_files = {}
-  for _, file in ipairs(files) do
-    local status = review.get_file_status(self, file)
-    if status_filter(status) then matching_files[#matching_files + 1] = file end
+  -- Optimization: when review_filter_enabled is active and we're navigating
+  -- "pending" files (unreviewed or changed), the panel already filtered the
+  -- list to only pending files, so we can skip re-checking statuses.
+  local matching_files
+  if skip_filter_when_panel_filtered and self.review_filter_enabled then
+    -- Panel already filtered to pending files - use the list directly
+    matching_files = files
+  else
+    -- Need to filter by status - use cached status lookups
+    matching_files = {}
+    for _, file in ipairs(files) do
+      -- Use cached status directly (cache was ensured above)
+      local status = self.review_status_cache and self.review_status_cache[file.path]
+      if status_filter(status) then matching_files[#matching_files + 1] = file end
+    end
   end
 
   if #matching_files == 0 then
@@ -810,9 +966,10 @@ end
 ---@param delta integer Direction to navigate (+1 for next, -1 for previous)
 ---@param status_filter fun(status: string|nil): boolean Function to filter files by status
 ---@param label string Label for the status message (e.g., "Pending review", "Unreviewed")
+---@param skip_filter_when_panel_filtered? boolean If true and review_filter_enabled, skip status filtering (panel already filtered)
 ---@return FileEntry|nil target_file The file navigated to, or nil if none found
 ---@private
-function DiffView:_navigate_review_file_from_entry(file_entry, delta, status_filter, label)
+function DiffView:_navigate_review_file_from_entry(file_entry, delta, status_filter, label, skip_filter_when_panel_filtered)
   self:ensure_layout()
 
   if self:file_safeguard() then return nil end
@@ -822,17 +979,33 @@ function DiffView:_navigate_review_file_from_entry(file_entry, delta, status_fil
     return nil
   end
 
+  -- Ensure cache is valid before any status lookups
+  self:ensure_review_status_cache()
+
   local files = self.panel:ordered_file_list()
   if #files == 0 then return nil end
 
   -- Build list of files matching the filter, preserving list order
+  -- Optimization: when review_filter_enabled is active and we're navigating
+  -- "pending" files (unreviewed or changed), the panel already filtered the
+  -- list to only pending files, so we can skip re-checking statuses.
   local matching_files = {}
   local matching_indices = {}
-  for i, file in ipairs(files) do
-    local status = review.get_file_status(self, file)
-    if status_filter(status) then
+  if skip_filter_when_panel_filtered and self.review_filter_enabled then
+    -- Panel already filtered to pending files - use the list directly
+    for i, file in ipairs(files) do
       matching_files[#matching_files + 1] = file
       matching_indices[#matching_files] = i
+    end
+  else
+    -- Need to filter by status - use cached status lookups
+    for i, file in ipairs(files) do
+      -- Use cached status directly (cache was ensured above)
+      local status = self.review_status_cache and self.review_status_cache[file.path]
+      if status_filter(status) then
+        matching_files[#matching_files + 1] = file
+        matching_indices[#matching_files] = i
+      end
     end
   end
 
@@ -901,7 +1074,8 @@ function DiffView:next_pending_review_file()
     self.panel.cur_file,
     1,
     function(status) return status == "unreviewed" or status == "changed" end,
-    "Pending review"
+    "Pending review",
+    true  -- Skip filter when panel already filtered to pending files
   )
 end
 
@@ -913,7 +1087,8 @@ function DiffView:next_pending_review_file_from(file_entry)
     file_entry,
     1,
     function(status) return status == "unreviewed" or status == "changed" end,
-    "Pending review"
+    "Pending review",
+    true  -- Skip filter when panel already filtered to pending files
   )
 end
 
@@ -924,7 +1099,8 @@ function DiffView:prev_pending_review_file()
     self.panel.cur_file,
     -1,
     function(status) return status == "unreviewed" or status == "changed" end,
-    "Pending review"
+    "Pending review",
+    true  -- Skip filter when panel already filtered to pending files
   )
 end
 
@@ -936,7 +1112,8 @@ function DiffView:prev_pending_review_file_from(file_entry)
     file_entry,
     -1,
     function(status) return status == "unreviewed" or status == "changed" end,
-    "Pending review"
+    "Pending review",
+    true  -- Skip filter when panel already filtered to pending files
   )
 end
 
@@ -969,6 +1146,10 @@ function DiffView:toggle_review_filter()
   end
 
   self.review_filter_enabled = not self.review_filter_enabled
+
+  -- Note: No cache invalidation needed here. Filter toggling only affects which
+  -- files are visible in the panel, not the underlying review status of files.
+  -- The cached statuses remain valid since HEAD and review state haven't changed.
 
   -- Update the panel to reflect the filter state
   self.panel:update_components()
@@ -1061,6 +1242,10 @@ function DiffView:toggle_since_review_mode()
   end
 
   self.since_review_mode = not self.since_review_mode
+
+  -- Note: No cache invalidation needed here. Mode toggling only affects which
+  -- files are visible in the panel, not the underlying review status of files.
+  -- The cached statuses remain valid since HEAD and review state haven't changed.
 
   -- When enabling since-review mode, also enable the review filter
   -- to show only files that need attention (unreviewed or changed)

@@ -364,6 +364,90 @@ describe("review filter", function()
       local result = mock_panel:should_show_file(file)
       eq(false, result)
     end)
+
+    it("uses get_cached_review_status when available", function()
+      local FilePanel = require("diffview.scene.views.diff.file_panel").FilePanel
+
+      local file = create_file_entry("src/test.lua")
+      local cached_status_calls = 0
+      local mock_panel = {
+        view = {
+          review_filter_enabled = true,
+          review_state = {}, -- Must be truthy but won't be used
+          get_cached_review_status = function(_, file_entry)
+            cached_status_calls = cached_status_calls + 1
+            return "unreviewed"
+          end,
+        },
+      }
+
+      mock_panel.should_show_file = FilePanel.should_show_file
+
+      local result = mock_panel:should_show_file(file)
+      eq(true, result) -- unreviewed files should be shown
+      eq(1, cached_status_calls) -- Should have used cached method
+    end)
+
+    it("falls back to review.get_file_status when get_cached_review_status is not available", function()
+      local FilePanel = require("diffview.scene.views.diff.file_panel").FilePanel
+
+      local file = create_file_entry("src/test.lua")
+      local mock_panel = {
+        view = {
+          review_filter_enabled = true,
+          review_state = create_mock_review_state({
+            ["src/test.lua"] = "changed",
+          }),
+          adapter = create_mock_adapter(),
+          -- No get_cached_review_status method
+        },
+      }
+
+      mock_panel.should_show_file = FilePanel.should_show_file
+
+      local result = mock_panel:should_show_file(file)
+      eq(true, result) -- changed files should be shown
+    end)
+
+    it("correctly filters with cached status returning reviewed", function()
+      local FilePanel = require("diffview.scene.views.diff.file_panel").FilePanel
+
+      local file = create_file_entry("src/reviewed.lua")
+      local mock_panel = {
+        view = {
+          review_filter_enabled = true,
+          review_state = {},
+          get_cached_review_status = function(_, file_entry)
+            return "reviewed"
+          end,
+        },
+      }
+
+      mock_panel.should_show_file = FilePanel.should_show_file
+
+      local result = mock_panel:should_show_file(file)
+      eq(false, result) -- reviewed files should NOT be shown when filter enabled
+    end)
+
+    it("correctly filters with cached status returning changed", function()
+      local FilePanel = require("diffview.scene.views.diff.file_panel").FilePanel
+
+      local file = create_file_entry("src/changed.lua")
+      local mock_panel = {
+        view = {
+          review_filter_enabled = true,
+          review_state = {},
+          get_cached_review_status = function(_, file_entry)
+            return "changed"
+          end,
+        },
+      }
+
+      mock_panel.should_show_file = FilePanel.should_show_file
+
+      local result = mock_panel:should_show_file(file)
+      eq(true, result) -- changed files should be shown when filter enabled
+    end)
   end)
 
   describe("FilePanel:ordered_file_list filtering", function()

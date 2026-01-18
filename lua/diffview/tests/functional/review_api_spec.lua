@@ -825,3 +825,411 @@ describe("diffview module integration", function()
     assert.is_function(diffview.review.get_cleanup_preview)
   end)
 end)
+
+describe("review status caching", function()
+  local review_store_mod = require("diffview.review_store")
+
+  describe("DiffView cache behavior", function()
+    -- Helper to create a mock DiffView-like object for cache testing
+    local function create_mock_diff_view(options)
+      options = options or {}
+
+      local mock_files = options.files or {}
+      local mock_review_files = options.review_files or {}
+
+      local mock = {
+        review_state = nil,  -- Will be set below if review enabled
+        review_status_cache = nil,
+        review_status_cache_head = nil,
+        review_status_cache_valid = false,
+        files = {
+          iter = function()
+            local idx = 0
+            return function()
+              idx = idx + 1
+              if idx <= #mock_files then
+                return idx, mock_files[idx]
+              end
+            end
+          end,
+        },
+        adapter = {
+          head_rev = function()
+            return { commit = options.head_commit or "abc123" }
+          end,
+          file_blob_hash = function(_, path, rev)
+            options.file_blob_hash_calls = (options.file_blob_hash_calls or 0) + 1
+            return options.blob_hashes and options.blob_hashes[path]
+          end,
+          file_blob_hashes_batch = function(_, paths, rev)
+            options.batch_calls = (options.batch_calls or 0) + 1
+            options.batch_paths = paths
+            local result = {}
+            for _, path in ipairs(paths) do
+              result[path] = options.blob_hashes and options.blob_hashes[path]
+            end
+            return result
+          end,
+        },
+      }
+
+      -- Add mock review_state if review files provided
+      if next(mock_review_files) then
+        local mock_store = { save_state = function() end }
+        mock.review_state = review_store_mod.ReviewState({
+          repo_id = "test-repo",
+          branch = "main",
+          store = mock_store,
+          files = mock_review_files,
+        })
+      end
+
+      -- Import DiffView methods (we'll call them with mock as self)
+      local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
+
+      -- Copy cache methods to mock (bound to mock)
+      mock.invalidate_review_status_cache = function(self, reason)
+        DiffView.invalidate_review_status_cache(self, reason)
+      end
+      mock.rebuild_review_status_cache = function(self)
+        DiffView.rebuild_review_status_cache(self)
+      end
+      mock.ensure_review_status_cache = function(self)
+        DiffView.ensure_review_status_cache(self)
+      end
+      mock.get_cached_review_status = function(self, file_entry)
+        return DiffView.get_cached_review_status(self, file_entry)
+      end
+
+      return mock, options
+    end
+
+    it("rebuild_review_status_cache uses batch lookup for paths needing blob comparison", function()
+      local mock_files = {
+        { path = "src/a.lua" },
+        { path = "src/b.lua" },
+        { path = "src/c.lua" },
+      }
+      local mock_review_files = {
+        ["src/a.lua"] = { blob_hash = "hash_a", reviewed_at = os.time() },
+        ["src/b.lua"] = { blob_hash = "hash_b", reviewed_at = os.time() },
+        -- src/c.lua is unreviewed
+      }
+      local blob_hashes = {
+        ["src/a.lua"] = "hash_a",  -- Same hash = reviewed
+        ["src/b.lua"] = "hash_b_new",  -- Different hash = changed
+      }
+      local options = {
+        files = mock_files,
+        review_files = mock_review_files,
+        blob_hashes = blob_hashes,
+        head_commit = "commit_xyz",
+      }
+      local mock = create_mock_diff_view(options)
+
+      mock:rebuild_review_status_cache()
+
+      -- Verify cache was built
+      assert.is_true(mock.review_status_cache_valid)
+      assert.equals("commit_xyz", mock.review_status_cache_head)
+
+      -- Verify statuses are correct
+      assert.equals("reviewed", mock.review_status_cache["src/a.lua"])
+      assert.equals("changed", mock.review_status_cache["src/b.lua"])
+      assert.equals("unreviewed", mock.review_status_cache["src/c.lua"])
+
+      -- Verify batch was called (not per-file calls)
+      assert.equals(1, options.batch_calls)
+      -- Only paths with review entries (needing blob comparison) should be in batch
+      assert.equals(2, #options.batch_paths)
+    end)
+
+    it("rebuild_review_status_cache uses commit_hash short-circuit", function()
+      local mock_files = {
+        { path = "src/a.lua" },
+        { path = "src/b.lua" },
+        { path = "src/c.lua" },
+      }
+      local head_commit = "head_abc123"
+      local mock_review_files = {
+        ["src/a.lua"] = {
+          blob_hash = "old_hash",
+          reviewed_at = os.time(),
+          commit_hash = head_commit,  -- Matches HEAD - should short-circuit
+        },
+        ["src/b.lua"] = {
+          blob_hash = "hash_b",
+          reviewed_at = os.time(),
+          commit_hash = "other_commit",  -- Different commit - needs blob lookup
+        },
+        -- src/c.lua is unreviewed
+      }
+      local blob_hashes = {
+        ["src/b.lua"] = "hash_b",  -- Same as reviewed hash
+      }
+      local options = {
+        files = mock_files,
+        review_files = mock_review_files,
+        blob_hashes = blob_hashes,
+        head_commit = head_commit,
+      }
+      local mock = create_mock_diff_view(options)
+
+      mock:rebuild_review_status_cache()
+
+      -- Verify statuses
+      assert.equals("reviewed", mock.review_status_cache["src/a.lua"])  -- Short-circuited
+      assert.equals("reviewed", mock.review_status_cache["src/b.lua"])  -- Blob hash matched
+      assert.equals("unreviewed", mock.review_status_cache["src/c.lua"])
+
+      -- Only src/b.lua should have been in the batch (src/a.lua was short-circuited)
+      assert.equals(1, options.batch_calls)
+      assert.equals(1, #options.batch_paths)
+      assert.equals("src/b.lua", options.batch_paths[1])
+    end)
+
+    it("invalidate_review_status_cache marks cache as invalid", function()
+      local mock = create_mock_diff_view({
+        files = { { path = "test.lua" } },
+        review_files = {},
+      })
+
+      -- Build cache first
+      mock.review_status_cache = { ["test.lua"] = "reviewed" }
+      mock.review_status_cache_head = "some_commit"
+      mock.review_status_cache_valid = true
+
+      -- Invalidate
+      mock:invalidate_review_status_cache("test_reason")
+
+      -- Cache should be marked invalid but not cleared
+      assert.is_false(mock.review_status_cache_valid)
+      -- Cache data is still there (lazy rebuild)
+      assert.is_not_nil(mock.review_status_cache)
+    end)
+
+    it("ensure_review_status_cache rebuilds when invalid", function()
+      local mock_files = { { path = "src/test.lua" } }
+      -- Need at least one review file to create review_state
+      local mock_review_files = {
+        ["src/other.lua"] = { blob_hash = "hash_other", reviewed_at = os.time() },
+      }
+      local options = {
+        files = mock_files,
+        review_files = mock_review_files,
+        head_commit = "commit_123",
+      }
+      local mock = create_mock_diff_view(options)
+
+      -- Start with invalid cache
+      assert.is_false(mock.review_status_cache_valid)
+
+      -- Ensure cache
+      mock:ensure_review_status_cache()
+
+      -- Should have rebuilt
+      assert.is_true(mock.review_status_cache_valid)
+      assert.equals("unreviewed", mock.review_status_cache["src/test.lua"])
+    end)
+
+    it("ensure_review_status_cache does not rebuild when valid", function()
+      local options = {
+        files = { { path = "src/test.lua" } },
+        review_files = {},
+        head_commit = "commit_123",
+      }
+      local mock = create_mock_diff_view(options)
+
+      -- Build cache manually
+      mock.review_status_cache = { ["src/test.lua"] = "reviewed" }
+      mock.review_status_cache_head = "commit_123"
+      mock.review_status_cache_valid = true
+
+      -- Ensure cache (should not rebuild)
+      mock:ensure_review_status_cache()
+
+      -- Should still have original data
+      assert.equals("reviewed", mock.review_status_cache["src/test.lua"])
+      -- No batch calls should have happened
+      assert.is_nil(options.batch_calls)
+    end)
+
+    it("get_cached_review_status returns nil when no review_state", function()
+      local mock = create_mock_diff_view({
+        files = { { path = "test.lua" } },
+        review_files = {},  -- This creates review_state
+      })
+      mock.review_state = nil  -- Remove it
+
+      local status = mock:get_cached_review_status({ path = "test.lua" })
+      assert.is_nil(status)
+    end)
+
+    it("get_cached_review_status returns cached status after rebuild", function()
+      local mock_files = { { path = "src/foo.lua" } }
+      local mock_review_files = {
+        ["src/foo.lua"] = { blob_hash = "hash_123", reviewed_at = os.time() },
+      }
+      local options = {
+        files = mock_files,
+        review_files = mock_review_files,
+        blob_hashes = { ["src/foo.lua"] = "hash_123" },
+        head_commit = "commit_abc",
+      }
+      local mock = create_mock_diff_view(options)
+
+      local status = mock:get_cached_review_status({ path = "src/foo.lua" })
+      assert.equals("reviewed", status)
+
+      -- Should have triggered rebuild
+      assert.is_true(mock.review_status_cache_valid)
+    end)
+
+    it("rebuild handles empty file list", function()
+      -- Need review_state for rebuild to proceed
+      local mock_review_files = {
+        ["src/other.lua"] = { blob_hash = "hash_other", reviewed_at = os.time() },
+      }
+      local options = {
+        files = {},  -- Empty file list
+        review_files = mock_review_files,
+        head_commit = "commit_123",
+      }
+      local mock = create_mock_diff_view(options)
+
+      mock:rebuild_review_status_cache()
+
+      assert.is_true(mock.review_status_cache_valid)
+      assert.equals("commit_123", mock.review_status_cache_head)
+      -- No batch calls for empty list
+      assert.is_nil(options.batch_calls)
+    end)
+
+    it("rebuild handles files with no paths gracefully", function()
+      -- Need review_state for rebuild to proceed
+      local mock_review_files = {
+        ["src/other.lua"] = { blob_hash = "hash_other", reviewed_at = os.time() },
+      }
+      local options = {
+        files = { { path = "valid.lua" }, { name = "no_path_file" }, { path = nil } },
+        review_files = mock_review_files,
+        head_commit = "commit_123",
+      }
+      local mock = create_mock_diff_view(options)
+
+      mock:rebuild_review_status_cache()
+
+      assert.is_true(mock.review_status_cache_valid)
+      -- Only valid.lua should be in cache
+      assert.equals("unreviewed", mock.review_status_cache["valid.lua"])
+    end)
+  end)
+
+  describe("commit_hash short-circuit", function()
+    it("treats file as reviewed when commit_hash matches HEAD", function()
+      -- Create a mock ReviewState with a file that has matching commit_hash
+      local mock_store = { save_state = function() end }
+      local review_state = review_store_mod.ReviewState({
+        repo_id = "test-repo",
+        branch = "main",
+        store = mock_store,
+        files = {
+          ["src/foo.lua"] = {
+            blob_hash = "old_blob_hash",  -- Different from current
+            reviewed_at = os.time(),
+            commit_hash = "abc123",  -- Will match HEAD
+          },
+        },
+      })
+
+      -- When commit_hash matches, status should be "reviewed" regardless of blob_hash
+      -- This is tested via the cache rebuild logic
+      assert.equals("reviewed", review_state:get_file_status("src/foo.lua", "old_blob_hash"))
+    end)
+
+    it("uses blob_hash comparison when commit_hash is missing", function()
+      local mock_store = { save_state = function() end }
+      local review_state = review_store_mod.ReviewState({
+        repo_id = "test-repo",
+        branch = "main",
+        store = mock_store,
+        files = {
+          ["src/foo.lua"] = {
+            blob_hash = "blob_hash_123",
+            reviewed_at = os.time(),
+            -- No commit_hash - legacy entry
+          },
+        },
+      })
+
+      -- Should use blob_hash comparison
+      assert.equals("reviewed", review_state:get_file_status("src/foo.lua", "blob_hash_123"))
+      assert.equals("changed", review_state:get_file_status("src/foo.lua", "different_hash"))
+    end)
+
+    it("uses blob_hash comparison when commit_hash differs from HEAD", function()
+      local mock_store = { save_state = function() end }
+      local review_state = review_store_mod.ReviewState({
+        repo_id = "test-repo",
+        branch = "main",
+        store = mock_store,
+        files = {
+          ["src/foo.lua"] = {
+            blob_hash = "blob_hash_123",
+            reviewed_at = os.time(),
+            commit_hash = "old_commit",  -- Different from HEAD
+          },
+        },
+      })
+
+      -- When commit_hash doesn't match HEAD, fall back to blob_hash comparison
+      assert.equals("reviewed", review_state:get_file_status("src/foo.lua", "blob_hash_123"))
+      assert.equals("changed", review_state:get_file_status("src/foo.lua", "new_blob_hash"))
+    end)
+  end)
+
+  describe("get_file_status with caching", function()
+    it("uses view's cached method when available", function()
+      config._config = { review = { enabled = true } }
+
+      local cached_status_calls = 0
+      local mock_view = {
+        review_state = {},
+        get_cached_review_status = function(_, file_entry)
+          cached_status_calls = cached_status_calls + 1
+          return "reviewed"
+        end,
+      }
+
+      local result = review.get_file_status(mock_view, { path = "test.lua" })
+      assert.equals("reviewed", result)
+      assert.equals(1, cached_status_calls)
+    end)
+
+    it("falls back to direct lookup when cache method is unavailable", function()
+      config._config = { review = { enabled = true } }
+
+      local direct_calls = 0
+      local mock_review_state = {
+        get_file_status = function(_, path, blob_hash)
+          direct_calls = direct_calls + 1
+          return "unreviewed"
+        end,
+      }
+      local mock_adapter = {
+        file_blob_hash = function()
+          return "some_hash"
+        end,
+      }
+      local mock_view = {
+        review_state = mock_review_state,
+        adapter = mock_adapter,
+        -- No get_cached_review_status method
+      }
+
+      local result = review.get_file_status(mock_view, { path = "test.lua" })
+      assert.equals("unreviewed", result)
+      assert.equals(1, direct_calls)
+    end)
+  end)
+end)

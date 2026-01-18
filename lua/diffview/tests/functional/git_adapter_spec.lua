@@ -520,4 +520,141 @@ describe("diffview.vcs.adapters.git", function()
       eq(false, jj_called)
     end)
   end)
+
+  describe("GitAdapter:file_blob_hashes_batch()", function()
+    local utils = require("diffview.utils")
+
+    -- Helper to create a mock adapter for batch blob hash tests
+    local function create_mock_adapter(options)
+      options = options or {}
+
+      local mock = {
+        ctx = {
+          toplevel = options.toplevel or "/mock/repo",
+        },
+        exec_sync = function(self, args, opts)
+          -- Handle git ls-tree command
+          if args[1] == "ls-tree" then
+            if options.ls_tree_fails then
+              return {}, options.ls_tree_exit_code or 128
+            end
+            -- Return mock ls-tree output
+            -- Format: "<mode> <type> <hash>\t<path>\0"
+            return options.ls_tree_output or {}, 0
+          end
+
+          return {}, 1
+        end,
+      }
+
+      setmetatable(mock, { __index = GitAdapter })
+      return mock
+    end
+
+    it("returns empty table for empty paths", function()
+      local adapter = create_mock_adapter()
+      local result = adapter:file_blob_hashes_batch({}, "HEAD")
+      eq({}, result)
+    end)
+
+    it("returns empty table for nil paths", function()
+      local adapter = create_mock_adapter()
+      local result = adapter:file_blob_hashes_batch(nil, "HEAD")
+      eq({}, result)
+    end)
+
+    it("returns blob hashes for valid paths", function()
+      -- Output uses NUL character (\000 in Lua) as separator
+      local adapter = create_mock_adapter({
+        ls_tree_output = {
+          "100644 blob abc123def456\tsrc/foo.lua\000100644 blob def789abc012\tsrc/bar.lua",
+        },
+      })
+
+      local result = adapter:file_blob_hashes_batch({ "src/foo.lua", "src/bar.lua" }, "HEAD")
+      eq("abc123def456", result["src/foo.lua"])
+      eq("def789abc012", result["src/bar.lua"])
+    end)
+
+    it("returns nil for missing paths", function()
+      -- Only one file in output - missing.lua is not returned by ls-tree
+      local adapter = create_mock_adapter({
+        ls_tree_output = {
+          "100644 blob abc123def456\tsrc/exists.lua",
+        },
+      })
+
+      local result = adapter:file_blob_hashes_batch({ "src/exists.lua", "src/missing.lua" }, "HEAD")
+      eq("abc123def456", result["src/exists.lua"])
+      eq(nil, result["src/missing.lua"])
+    end)
+
+    it("handles paths with special characters", function()
+      -- Output uses NUL character (\000 in Lua) as separator
+      local adapter = create_mock_adapter({
+        ls_tree_output = {
+          "100644 blob abc123456789\tpath with spaces/file.lua\000100644 blob def456789012\tpath-with-dash.lua",
+        },
+      })
+
+      local result = adapter:file_blob_hashes_batch({
+        "path with spaces/file.lua",
+        "path-with-dash.lua",
+      }, "HEAD")
+      eq("abc123456789", result["path with spaces/file.lua"])
+      eq("def456789012", result["path-with-dash.lua"])
+    end)
+
+    it("initializes all paths to nil before processing", function()
+      local adapter = create_mock_adapter({
+        ls_tree_output = {},  -- No output - all paths fail
+      })
+
+      local paths = { "a.lua", "b.lua", "c.lua" }
+      local result = adapter:file_blob_hashes_batch(paths, "HEAD")
+
+      -- All paths should be present in result, but nil
+      for _, path in ipairs(paths) do
+        eq(true, result[path] == nil, "Expected nil for " .. path)
+      end
+    end)
+
+    it("uses default rev_arg of HEAD when not specified", function()
+      local exec_calls = {}
+      local mock = {
+        ctx = { toplevel = "/mock/repo" },
+        exec_sync = function(self, args, opts)
+          table.insert(exec_calls, args)
+          return {}, 0
+        end,
+      }
+      setmetatable(mock, { __index = GitAdapter })
+
+      mock:file_blob_hashes_batch({ "test.lua" })
+
+      -- Should have called ls-tree with HEAD
+      eq(true, #exec_calls > 0)
+      local found_head = false
+      for _, call in ipairs(exec_calls) do
+        for _, arg in ipairs(call) do
+          if arg == "HEAD" then
+            found_head = true
+            break
+          end
+        end
+      end
+      eq(true, found_head, "Expected HEAD in ls-tree call")
+    end)
+
+    it("handles ls-tree failure gracefully", function()
+      local adapter = create_mock_adapter({
+        ls_tree_fails = true,
+        ls_tree_exit_code = 128,
+      })
+
+      local result = adapter:file_blob_hashes_batch({ "src/foo.lua" }, "HEAD")
+      -- Should return table with nil values, not error
+      eq(nil, result["src/foo.lua"])
+    end)
+  end)
 end)

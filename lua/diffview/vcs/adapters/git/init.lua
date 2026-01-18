@@ -1464,6 +1464,84 @@ function GitAdapter:file_blob_hash(path, rev_arg)
   return vim.trim(out[1])
 end
 
+---Batch resolve blob hashes for multiple file paths in a single git process.
+---Uses `git ls-tree` for reliable batch lookups with NUL-separated output.
+---@param paths string[] List of file paths (relative to toplevel)
+---@param rev_arg string? Revision argument (default: "HEAD")
+---@return table<string, string|nil> Map of path -> blob_hash (nil for missing/error paths)
+function GitAdapter:file_blob_hashes_batch(paths, rev_arg)
+  if not paths or #paths == 0 then
+    return {}
+  end
+
+  rev_arg = rev_arg or "HEAD"
+  return self:_file_blob_hashes_via_ls_tree(paths, rev_arg)
+end
+
+---Internal helper: batch resolve blob hashes using `git ls-tree`.
+---This is more reliable than rev-parse --stdin for batch blob lookups.
+---@param paths string[] List of file paths (relative to toplevel)
+---@param rev_arg string Revision argument (e.g., "HEAD")
+---@return table<string, string|nil> Map of path -> blob_hash
+---@private
+function GitAdapter:_file_blob_hashes_via_ls_tree(paths, rev_arg)
+  if not paths or #paths == 0 then
+    return {}
+  end
+
+  local result = {}
+  -- Initialize all paths to nil
+  for _, path in ipairs(paths) do
+    result[path] = nil
+  end
+
+  -- Chunk size to avoid command line limits
+  local chunk_size = 300
+  local num_chunks = math.ceil(#paths / chunk_size)
+
+  for chunk_idx = 1, num_chunks do
+    local start_idx = (chunk_idx - 1) * chunk_size + 1
+    local end_idx = math.min(chunk_idx * chunk_size, #paths)
+    local chunk_paths = {}
+    for i = start_idx, end_idx do
+      chunk_paths[#chunk_paths + 1] = paths[i]
+    end
+
+    -- Use git ls-tree with -z for NUL-separated output (handles special chars in paths)
+    -- Format: <mode> SP <type> SP <object> TAB <file>
+    local out, code = self:exec_sync(
+      utils.vec_join(
+        "ls-tree",
+        "-z",  -- NUL-separated output
+        rev_arg,
+        "--",
+        chunk_paths
+      ),
+      {
+        cwd = self.ctx.toplevel,
+        silent = true,
+      }
+    )
+
+    if code == 0 and out and #out > 0 then
+      -- Parse NUL-separated output
+      -- Each entry is: "<mode> <type> <hash>\t<path>\0"
+      local data = table.concat(out, "\n")
+      -- Split by NUL character using vim.split
+      local entries = vim.split(data, "\0", { plain = true, trimempty = true })
+      for _, entry in ipairs(entries) do
+        -- Parse: "<mode> <type> <hash>\t<path>"
+        local hash, path = entry:match("^%d+ %w+ (%x+)\t(.+)$")
+        if hash and path then
+          result[path] = hash
+        end
+      end
+    end
+  end
+
+  return result
+end
+
 ---Parse two endpoint, commit revs from a symmetric difference notated rev arg.
 ---@param rev_arg string
 ---@return Rev? left The left rev.

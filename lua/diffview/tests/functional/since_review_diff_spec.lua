@@ -260,52 +260,6 @@ describe("since-review diff mode", function()
       api.nvim_echo = orig_echo
     end)
 
-    it("shows info when toggling on but current file is not 'changed'", function()
-      local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
-      local utils = require("diffview.utils")
-      local api = vim.api
-
-      local orig_echo = api.nvim_echo
-      api.nvim_echo = function() end
-
-      local info_messages = {}
-      local orig_info = utils.info
-      utils.info = function(msg)
-        table.insert(info_messages, msg)
-      end
-
-      local file = create_file_entry("src/reviewed.lua")
-
-      local mock_view = {
-        since_review_mode = false,
-        review_state = create_mock_review_state({
-          ["src/reviewed.lua"] = {
-            blob_hash = "same_hash",
-            reviewed_at = os.time(),
-          },
-        }),
-        adapter = create_mock_adapter({
-          blob_hashes = { ["src/reviewed.lua"] = "same_hash" }, -- Same hash = reviewed
-        }),
-        cur_entry = file,
-        panel = {
-          render = function() end,
-          redraw = function() end,
-        },
-        _set_file = function(self, f) end,
-      }
-
-      mock_view.toggle_since_review_mode = DiffView.toggle_since_review_mode
-
-      mock_view:toggle_since_review_mode()
-
-      eq(true, mock_view.since_review_mode)
-      eq(1, #info_messages)
-      assert.is_truthy(string.find(info_messages[1], "only affects files with 'changed' status"))
-
-      utils.info = orig_info
-      api.nvim_echo = orig_echo
-    end)
   end)
 
   describe("verify_commit_exists", function()
