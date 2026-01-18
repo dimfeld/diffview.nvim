@@ -137,6 +137,7 @@ review = {
   cache_dir = nil,             -- Storage location (default: ~/.cache/diffview.nvim/reviews/)
   auto_cleanup = false,        -- Auto-cleanup stale branch data on DiffView open
   cleanup_age_days = 30,       -- Age threshold for auto-cleanup (days)
+  auto_advance = "stay",       -- "stay", "next", or "next_pending"
   symbols = {
     unreviewed = " ",          -- No indicator
     reviewed = "●",            -- Filled circle (green)
@@ -352,6 +353,7 @@ require("diffview").setup({
     cache_dir = nil,  -- Review state storage (default: ~/.cache/diffview.nvim/reviews/)
     auto_cleanup = false,    -- Auto-cleanup stale branch review data on DiffView open
     cleanup_age_days = 30,   -- Age threshold for cleanup (days)
+    auto_advance = "stay",   -- "stay", "next", or "next_pending"
     symbols = {       -- Symbols for review state indicator in file panel
       unreviewed = " ",  -- Blank space (no indicator)
       reviewed = "●",    -- Filled circle (green)

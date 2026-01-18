@@ -4,6 +4,7 @@ local lazy = require("diffview.lazy")
 local EventName = lazy.access("diffview.events", "EventName") ---@type EventName|LazyModule
 local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|LazyModule
 local actions = lazy.require("diffview.actions") ---@module "diffview.actions"
+local config = lazy.require("diffview.config") ---@module "diffview.config"
 local review = lazy.require("diffview.review") ---@module "diffview.review"
 local review_store = lazy.require("diffview.review_store") ---@module "diffview.review_store"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
@@ -335,7 +336,18 @@ return function(view)
     review_mark_file = function()
       local file = view:infer_cur_file()
       if not file then return end
-      review.mark_file_reviewed(view, file)
+      if not review.mark_file_reviewed(view, file) then
+        return
+      end
+
+      local cfg = config._config or config.get_config()
+      local advance = cfg.review and cfg.review.auto_advance or "stay"
+
+      if advance == "next" then
+        view:next_file(true)
+      elseif advance == "next_pending" then
+        view:next_pending_review_file()
+      end
     end,
     review_mark_all = function()
       review.mark_all_reviewed(view)

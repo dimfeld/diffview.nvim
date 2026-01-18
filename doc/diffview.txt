@@ -735,6 +735,14 @@ review                                          *diffview-config-review*
                 exist are never deleted based on age.
                 Default: `30`
 
+            {auto_advance} (string)
+                Control what happens after marking a file as reviewed.
+                - `"stay"`: Stay on the current file.
+                - `"next"`: Move to the next file in the list.
+                - `"next_pending"`: Move to the next file pending review
+                  (unreviewed or changed).
+                Default: `"stay"`
+
             {symbols} (table)
                 Symbols used for the review state indicator in the file
                 panel. Each symbol should be a single character.
@@ -759,6 +767,7 @@ review                                          *diffview-config-review*
                   cache_dir = vim.fn.stdpath("cache") .. "/my-reviews/",
                   auto_cleanup = true,     -- Clean up stale branches on open
                   cleanup_age_days = 14,   -- Only clean data older than 14 days
+                  auto_advance = "next_pending",
                   symbols = {
                     unreviewed = " ",
                     reviewed = "✓",
@@ -1299,6 +1308,9 @@ review_mark_file                                *diffview-actions-review_mark_fi
         hash, so if the file changes after being marked, it will show as
         "changed" rather than "reviewed". Only available when review tracking
         is enabled.
+        If |diffview-config-review| has `auto_advance` set to `"next"` or
+        `"next_pending"`, this action will move to the corresponding file
+        after marking.
 
 [count] review_next_pending                     *diffview-actions-review_next_pending*
         Contexts: `diff_view`, `file_panel`

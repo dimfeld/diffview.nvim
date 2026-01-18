@@ -163,6 +163,9 @@ As you work through a PR, you can mark files as reviewed to track your progress:
 - `<leader>rM` - Mark all files as reviewed
 - `<leader>rc` - Clear the review status for the current file
 
+You can optionally auto-advance after marking a file by setting
+`review.auto_advance` to `"next"` or `"next_pending"` in your config.
+
 When you mark a file as reviewed, the plugin records the file's current blob hash.
 If the file changes later (e.g., after the author pushes updates), it will show
 as "changed" (half-filled circle) instead of "reviewed" (filled circle), indicating

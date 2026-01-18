@@ -102,6 +102,59 @@ describe("review action listeners", function()
       eq("abc123", mock_view._test_marked_files["src/test.lua"].hash)
     end)
 
+    it("auto-advances to the next file when configured", function()
+      config._config = { review = { enabled = true, auto_advance = "next" } }
+
+      local file_entry = { path = "src/test.lua" }
+      local mock_view = create_mock_view({
+        cur_file = file_entry,
+        blob_hashes = { ["src/test.lua"] = "abc123" },
+      })
+
+      local next_file_calls = 0
+      local next_pending_calls = 0
+
+      mock_view.next_file = function(_, highlight)
+        next_file_calls = next_file_calls + 1
+        eq(true, highlight)
+      end
+      mock_view.next_pending_review_file = function()
+        next_pending_calls = next_pending_calls + 1
+      end
+
+      local listeners = listeners_module(mock_view)
+      listeners.review_mark_file()
+
+      eq(1, next_file_calls)
+      eq(0, next_pending_calls)
+    end)
+
+    it("auto-advances to the next pending file when configured", function()
+      config._config = { review = { enabled = true, auto_advance = "next_pending" } }
+
+      local file_entry = { path = "src/test.lua" }
+      local mock_view = create_mock_view({
+        cur_file = file_entry,
+        blob_hashes = { ["src/test.lua"] = "abc123" },
+      })
+
+      local next_file_calls = 0
+      local next_pending_calls = 0
+
+      mock_view.next_file = function()
+        next_file_calls = next_file_calls + 1
+      end
+      mock_view.next_pending_review_file = function()
+        next_pending_calls = next_pending_calls + 1
+      end
+
+      local listeners = listeners_module(mock_view)
+      listeners.review_mark_file()
+
+      eq(0, next_file_calls)
+      eq(1, next_pending_calls)
+    end)
+
     it("does nothing when no file is selected", function()
       config._config = { review = { enabled = true } }
 

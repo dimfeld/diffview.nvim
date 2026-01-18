@@ -116,6 +116,7 @@ M.defaults = {
     cache_dir = nil, -- Falls back to ~/.cache/diffview.nvim/reviews/
     auto_cleanup = false, -- Enable automatic cleanup of stale branch review data on DiffView open
     cleanup_age_days = 30, -- Age threshold in days for cleanup (stale branches and detached HEAD)
+    auto_advance = "stay", -- After marking a file reviewed: "stay", "next", "next_pending"
     symbols = {
       unreviewed = " ",  -- Blank space (reserved column)
       reviewed = "●",    -- Filled circle
