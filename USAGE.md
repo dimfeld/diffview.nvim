@@ -233,6 +233,124 @@ When enabled, stale review data is cleaned up silently in the background each
 time you open a DiffView. An info message is shown only when files are actually
 removed.
 
+## Using JSON Grouped Views
+
+The `:DiffviewOpenJson` command lets you organize files into custom named groups
+using a JSON file. This is particularly useful for structured code reviews.
+
+### Organizing a PR Review by Feature Area
+
+When reviewing a large PR, you might want to group files by their logical
+purpose rather than viewing them alphabetically:
+
+```json
+{
+  "title": "Feature: User Authentication",
+  "groups": [
+    {
+      "name": "Database Schema",
+      "files": [
+        { "path": "migrations/001_add_users_table.sql" },
+        { "path": "src/models/user.ts" }
+      ]
+    },
+    {
+      "name": "API Endpoints",
+      "files": [
+        { "path": "src/api/auth.ts" },
+        { "path": "src/api/middleware/auth.ts" }
+      ]
+    },
+    {
+      "name": "Frontend Components",
+      "files": [
+        { "path": "src/components/LoginForm.tsx" },
+        { "path": "src/components/SignupForm.tsx" },
+        { "path": "src/hooks/useAuth.ts" }
+      ]
+    },
+    {
+      "name": "Tests",
+      "files": [
+        { "path": "tests/auth.test.ts" },
+        { "path": "tests/components/LoginForm.test.tsx" }
+      ]
+    }
+  ]
+}
+```
+
+Open with:
+
+```vim
+:DiffviewOpenJson auth-review.json origin/main...HEAD
+```
+
+### Generating JSON from External Tools
+
+You can generate the JSON file programmatically. For example, using a shell
+script to group files by directory:
+
+```bash
+#!/bin/bash
+# group-by-dir.sh - Generate grouped JSON from git diff
+
+base_ref="${1:-HEAD~1}"
+
+echo '{"groups": ['
+
+git diff --name-only "$base_ref" | awk -F/ '
+BEGIN { first_group = 1 }
+{
+    dir = ($1 == $0) ? "root" : $1
+    files[dir] = files[dir] (files[dir] ? "," : "") "{\"path\":\"" $0 "\"}"
+}
+END {
+    for (dir in files) {
+        if (!first_group) print ","
+        first_group = 0
+        print "{\"name\":\"" dir "\",\"files\":[" files[dir] "]}"
+    }
+}
+'
+
+echo ']}'
+```
+
+Usage:
+
+```bash
+./group-by-dir.sh origin/main > review.json
+```
+
+Then in Neovim:
+
+```vim
+:DiffviewOpenJson review.json origin/main
+```
+
+### Combining with Review Tracking
+
+JSON grouped views work with the review tracking feature. As you review files:
+
+1. Use `<leader>rm` to mark files as reviewed
+2. Use `]r` / `[r` to navigate between files pending review
+3. Use `<leader>rf` to filter the panel to show only pending files
+
+The review state persists across sessions, so you can close the view and resume
+later.
+
+### Tips
+
+- **Files with no changes are hidden**: If a file in your JSON has no diff at
+  the specified revision, it won't appear in the view
+- **Missing files show a warning**: If a path doesn't exist in git, you'll see
+  a warning but the view will still open with the valid files
+- **Empty groups are hidden**: Groups with no visible files after filtering
+  don't clutter the panel
+- **Standard navigation works**: All existing keymaps (`<tab>`, `<s-tab>`, `]f`,
+  `[f`, etc.) work as expected
+
 ## Inspecting Diffs for Stashes
 
 The latest Git stash is always stored in the reference `refs/stash`. We can

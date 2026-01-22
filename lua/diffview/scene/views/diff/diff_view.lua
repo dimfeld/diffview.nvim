@@ -8,6 +8,7 @@ local EditToken = lazy.access("diffview.diff", "EditToken") ---@type EditToken|L
 local EventName = lazy.access("diffview.events", "EventName") ---@type EventName|LazyModule
 local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModule
 local FileDict = lazy.access("diffview.vcs.file_dict", "FileDict") ---@type FileDict|LazyModule
+local GroupedFileDict = lazy.access("diffview.grouped_file_dict", "GroupedFileDict") ---@type GroupedFileDict|LazyModule
 local FileEntry = lazy.access("diffview.scene.file_entry", "FileEntry") ---@type FileEntry|LazyModule
 local FilePanel = lazy.access("diffview.scene.views.diff.file_panel", "FilePanel") ---@type FilePanel|LazyModule
 local GitRev = lazy.access("diffview.vcs.adapters.git.rev", "GitRev") ---@type GitRev|LazyModule
@@ -44,7 +45,7 @@ local M = {}
 ---@field options DiffViewOptions
 ---@field panel FilePanel
 ---@field commit_log_panel CommitLogPanel
----@field files FileDict
+---@field files FileDict|GroupedFileDict
 ---@field file_idx integer
 ---@field merge_ctx? vcs.MergeContext
 ---@field initialized boolean
@@ -62,7 +63,7 @@ local DiffView = oop.create_class("DiffView", StandardView.__get())
 ---DiffView constructor
 function DiffView:init(opt)
   self.valid = false
-  self.files = FileDict()
+  self.files = opt.files or FileDict()
   self.adapter = opt.adapter
   self.path_args = opt.path_args
   self.rev_arg = opt.rev_arg
@@ -141,7 +142,23 @@ function DiffView:post_open()
 
   vim.schedule(function()
     self:file_safeguard()
-    if self.files:len() == 0 then self:update_files() end
+    if self.files.is_grouped and self.files:is_grouped() then
+      self.panel:update_components()
+      self.panel:render()
+      self.panel:redraw()
+      self.panel:reconstrain_cursor()
+
+      if self.files:len() > 0 and not self.panel.cur_file then
+        local entry = self.panel:next_file()
+        if entry then
+          self:set_file(entry, false, true)
+        end
+      end
+
+      self.initialized = true
+    elseif self.files:len() == 0 then
+      self:update_files()
+    end
     self.ready = true
   end)
 end
@@ -459,6 +476,11 @@ DiffView.update_files = debounce.debounce_trailing(
     -- Never update unless the view is in focus
     if self.tabpage ~= api.nvim_get_current_tabpage() then
       callback({ "The update was cancelled." })
+      return
+    end
+
+    if self.files.is_grouped and self.files:is_grouped() then
+      callback()
       return
     end
 

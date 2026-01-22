@@ -226,53 +226,76 @@ return function(panel)
     comp:ln()
   end
 
-  if #panel.files.conflicting > 0 then
-    comp = panel.components.conflicting.title.comp
-    comp:add_text("Conflicts ", "DiffviewFilePanelTitle")
-    if view and view.review_filter_enabled then
-      local visible = count_visible_section_files(panel.files.conflicting, view)
-      comp:add_text(string.format("(%d/%d)", visible, #panel.files.conflicting), "DiffviewFilePanelCounter")
-    else
-      comp:add_text("(" .. #panel.files.conflicting .. ")", "DiffviewFilePanelCounter")
+  if panel.files.is_grouped and panel.files:is_grouped() then
+    if panel.files.title then
+      comp:add_line(panel.files.title, "DiffviewFilePanelTitle")
+      comp:ln()
     end
-    comp:ln()
 
-    render_files(panel.listing_style, panel.components.conflicting.files.comp, view)
-    panel.components.conflicting.margin.comp:add_line()
-  end
+    for i, group in ipairs(panel.files.groups) do
+      local group_comp = panel.components["group_" .. i]
+      comp = group_comp.title.comp
+      comp:add_text(group.name .. " ", "DiffviewFilePanelTitle")
+      if view and view.review_filter_enabled then
+        local visible = count_visible_section_files(group.files, view)
+        comp:add_text(string.format("(%d/%d)", visible, #group.files), "DiffviewFilePanelCounter")
+      else
+        comp:add_text("(" .. #group.files .. ")", "DiffviewFilePanelCounter")
+      end
+      comp:ln()
 
-  local has_other_files = #panel.files.conflicting > 0 or #panel.files.staged > 0
-
-  -- Don't show the 'Changes' section if it's empty and we have other visible
-  -- sections.
-  if #panel.files.working > 0 or not has_other_files then
-    comp = panel.components.working.title.comp
-    comp:add_text("Changes ", "DiffviewFilePanelTitle")
-    if view and view.review_filter_enabled then
-      local visible = count_visible_section_files(panel.files.working, view)
-      comp:add_text(string.format("(%d/%d)", visible, #panel.files.working), "DiffviewFilePanelCounter")
-    else
-      comp:add_text("(" .. #panel.files.working .. ")", "DiffviewFilePanelCounter")
+      render_files(panel.listing_style, group_comp.files.comp, view)
+      group_comp.margin.comp:add_line()
     end
-    comp:ln()
+  else
+    if #panel.files.conflicting > 0 then
+      comp = panel.components.conflicting.title.comp
+      comp:add_text("Conflicts ", "DiffviewFilePanelTitle")
+      if view and view.review_filter_enabled then
+        local visible = count_visible_section_files(panel.files.conflicting, view)
+        comp:add_text(string.format("(%d/%d)", visible, #panel.files.conflicting), "DiffviewFilePanelCounter")
+      else
+        comp:add_text("(" .. #panel.files.conflicting .. ")", "DiffviewFilePanelCounter")
+      end
+      comp:ln()
 
-    render_files(panel.listing_style, panel.components.working.files.comp, view)
-    panel.components.working.margin.comp:add_line()
-  end
-
-  if #panel.files.staged > 0 then
-    comp = panel.components.staged.title.comp
-    comp:add_text("Staged changes ", "DiffviewFilePanelTitle")
-    if view and view.review_filter_enabled then
-      local visible = count_visible_section_files(panel.files.staged, view)
-      comp:add_text(string.format("(%d/%d)", visible, #panel.files.staged), "DiffviewFilePanelCounter")
-    else
-      comp:add_text("(" .. #panel.files.staged .. ")", "DiffviewFilePanelCounter")
+      render_files(panel.listing_style, panel.components.conflicting.files.comp, view)
+      panel.components.conflicting.margin.comp:add_line()
     end
-    comp:ln()
 
-    render_files(panel.listing_style, panel.components.staged.files.comp, view)
-    panel.components.staged.margin.comp:add_line()
+    local has_other_files = #panel.files.conflicting > 0 or #panel.files.staged > 0
+
+    -- Don't show the 'Changes' section if it's empty and we have other visible
+    -- sections.
+    if #panel.files.working > 0 or not has_other_files then
+      comp = panel.components.working.title.comp
+      comp:add_text("Changes ", "DiffviewFilePanelTitle")
+      if view and view.review_filter_enabled then
+        local visible = count_visible_section_files(panel.files.working, view)
+        comp:add_text(string.format("(%d/%d)", visible, #panel.files.working), "DiffviewFilePanelCounter")
+      else
+        comp:add_text("(" .. #panel.files.working .. ")", "DiffviewFilePanelCounter")
+      end
+      comp:ln()
+
+      render_files(panel.listing_style, panel.components.working.files.comp, view)
+      panel.components.working.margin.comp:add_line()
+    end
+
+    if #panel.files.staged > 0 then
+      comp = panel.components.staged.title.comp
+      comp:add_text("Staged changes ", "DiffviewFilePanelTitle")
+      if view and view.review_filter_enabled then
+        local visible = count_visible_section_files(panel.files.staged, view)
+        comp:add_text(string.format("(%d/%d)", visible, #panel.files.staged), "DiffviewFilePanelCounter")
+      else
+        comp:add_text("(" .. #panel.files.staged .. ")", "DiffviewFilePanelCounter")
+      end
+      comp:ln()
+
+      render_files(panel.listing_style, panel.components.staged.files.comp, view)
+      panel.components.staged.margin.comp:add_line()
+    end
   end
 
   if panel.rev_pretty_name or (panel.path_args and #panel.path_args > 0) then

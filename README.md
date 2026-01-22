@@ -81,6 +81,61 @@ Get started by opening file history for:
 
 For more info, see `:h :DiffviewFileHistory`.
 
+## JSON Grouped Views
+
+You can open a diff view with files organized into custom named groups using a
+JSON file. This is useful for:
+
+- **Code review workflows**: Organize files by logical feature areas (frontend,
+  backend, tests) rather than alphabetically
+- **Automated tooling**: Generate curated file lists from external tools (e.g.,
+  AI code analysis, dependency impact analysis)
+- **Educational walkthroughs**: Show specific files in a specific order
+
+### Basic Usage
+
+Create a JSON file defining your groups:
+
+```json
+{
+  "title": "PR #123: Add authentication",
+  "groups": [
+    {
+      "name": "Frontend",
+      "files": [
+        { "path": "src/components/Login.tsx" },
+        { "path": "src/components/Signup.tsx" }
+      ]
+    },
+    {
+      "name": "Backend",
+      "files": [
+        { "path": "src/api/auth.ts" }
+      ]
+    }
+  ]
+}
+```
+
+Then open it with:
+
+```vim
+:DiffviewOpenJson review.json HEAD~5
+:DiffviewOpenJson review.json main..feature-branch
+```
+
+The command accepts the same revision arguments as `:DiffviewOpen`. File status
+and diffs are computed from git based on the specified revisions.
+
+### Filtering
+
+- Files with no changes at the specified revisions are automatically filtered out
+- Missing files show a warning, but the view continues with valid files
+- Empty groups (after filtering) are hidden
+- If all groups are empty, an error is shown
+
+For more details, see `:h :DiffviewOpenJson`.
+
 ## Review Tracking
 
 This fork adds review tracking functionality to help you keep track of which

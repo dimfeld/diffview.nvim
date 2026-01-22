@@ -24,6 +24,19 @@ command("DiffviewOpen", function(ctx)
   diffview.open(arg_parser.scan(ctx.args).args)
 end, { nargs = "*", complete = completion })
 
+command("DiffviewOpenJson", function(ctx)
+  local args = arg_parser.scan(ctx.args).args
+  if #args < 1 then
+    local utils = lazy.require("diffview.utils")
+    utils.err("Usage: DiffviewOpenJson {json_path} [rev_args...]")
+    return
+  end
+
+  local json_path = args[1]
+  local rev_args = vim.list_slice(args, 2)
+  diffview.open_json(json_path, rev_args)
+end, { nargs = "+", complete = completion })
+
 command("DiffviewFileHistory", function(ctx)
   local range
 

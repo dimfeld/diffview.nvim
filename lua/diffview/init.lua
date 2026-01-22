@@ -137,6 +137,15 @@ function M.open(args)
   end
 end
 
+---@param json_path string
+---@param rev_args? string[]
+function M.open_json(json_path, rev_args)
+  local view = lib.json_view_open(json_path, rev_args)
+  if view then
+    view:open()
+  end
+end
+
 ---@param range? { [1]: integer, [2]: integer }
 ---@param args string[]
 function M.file_history(range, args)
@@ -198,6 +207,45 @@ M.completers = {
 
     for i = 2, math.min(#ctx.args, ctx.divideridx) do
       if ctx.args[i]:sub(1, 1) ~= "-" and i ~= ctx.argidx then
+        has_rev_arg = true
+        break
+      end
+    end
+
+    local candidates = {}
+
+    if ctx.argidx > ctx.divideridx then
+      if adapter then
+        utils.vec_push(candidates, unpack(adapter:path_candidates(ctx.arg_lead)))
+      else
+        utils.vec_push(candidates, unpack(vim.fn.getcompletion(ctx.arg_lead, "file", 0)))
+      end
+    elseif adapter then
+      if not has_rev_arg and ctx.arg_lead:sub(1, 1) ~= "-" then
+        utils.vec_push(candidates, unpack(adapter.comp.open:get_all_names()))
+        utils.vec_push(candidates, unpack(adapter:rev_candidates(ctx.arg_lead, {
+          accept_range = true,
+        })))
+      else
+        utils.vec_push(candidates, unpack(
+          adapter.comp.open:get_completion(ctx.arg_lead)
+          or adapter.comp.open:get_all_names()
+        ))
+      end
+    end
+
+    return candidates
+  end,
+  ---@param ctx CmdLineContext
+  DiffviewOpenJson = function(ctx)
+    if ctx.argidx == 2 then
+      return vim.fn.getcompletion(ctx.arg_lead, "file", 0)
+    end
+    local has_rev_arg = false
+    local adapter = M.get_adapter()
+
+    for i = 2, math.min(#ctx.args, ctx.divideridx) do
+      if i ~= 2 and ctx.args[i]:sub(1, 1) ~= "-" and i ~= ctx.argidx then
         has_rev_arg = true
         break
       end
