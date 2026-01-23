@@ -367,6 +367,83 @@ COMMANDS                                        *diffview-commands*
         --exclude={pattern}
                 Exclude commits touching files as specified in the {pattern}.
 
+                                                *:DiffviewOpenJson*
+:DiffviewOpenJson {json_path} [git-rev] [options]
+
+        Opens a new Diffview with files organized into custom named groups
+        defined in a JSON file. This is useful for organizing code review by
+        logical areas, or for automated tooling that generates curated file
+        lists.
+
+        The JSON file specifies which files to show and how to group them.
+        Git is used to compute file status and diffs based on the provided
+        [git-rev] arguments (same syntax as |:DiffviewOpen|).
+
+        Examples: >vim
+
+            " Open with files from JSON, comparing working tree against index:
+            :DiffviewOpenJson review.json
+
+            " Compare against a specific commit:
+            :DiffviewOpenJson review.json HEAD~5
+
+            " Compare against a branch:
+            :DiffviewOpenJson review.json main
+
+            " Compare a commit range:
+            :DiffviewOpenJson review.json main..feature-branch
+<
+        JSON Schema: >json
+
+            {
+              "title": "Optional display title",
+              "groups": [
+                {
+                  "name": "Frontend Changes",
+                  "files": [
+                    { "path": "src/components/Login.tsx" },
+                    { "path": "src/components/Signup.tsx" }
+                  ]
+                },
+                {
+                  "name": "Backend Changes",
+                  "files": [
+                    { "path": "src/api/auth.ts" }
+                  ]
+                }
+              ]
+            }
+<
+        Schema Fields: ~
+            {title} (string, optional)
+                Display title shown in the file panel header.
+
+            {groups} (array, required)
+                Array of file groups. At least one group is required.
+
+                {name} (string, required)
+                    Section header text displayed in the file panel.
+
+                {files} (array, required)
+                    Array of file entries.
+
+                    {path} (string, required)
+                        File path relative to git toplevel.
+
+        Filtering Behavior: ~
+            • Files with no changes at the specified revisions are filtered out
+            • Missing files show a warning but the view continues with valid files
+            • Empty groups (after filtering) are hidden
+            • If all groups are empty after filtering, an error is shown
+
+        Notes: ~
+            • File status (M, A, D, etc.) is computed from git, not the JSON
+            • Renamed files are detected automatically by git
+            • Both tree and list listing styles work with custom groups
+            • Standard navigation keymaps work as expected
+            • When both staged and working/untracked entries exist for a path,
+              the working/untracked entry is preferred
+
                                                 *:DiffviewClose*
 :DiffviewClose          Close the active Diffview.
 

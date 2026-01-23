@@ -15,7 +15,7 @@ local M = {}
 ---@class FilePanel : Panel
 ---@field view DiffView
 ---@field adapter VCSAdapter
----@field files FileDict
+---@field files FileDict|GroupedFileDict
 ---@field path_args string[]
 ---@field rev_pretty_name string|nil
 ---@field cur_file FileEntry
@@ -25,6 +25,7 @@ local M = {}
 ---@field components CompStruct
 ---@field constrain_cursor function
 ---@field help_mapping string
+---@field group_component_names string[]|nil
 local FilePanel = oop.create_class("FilePanel", Panel)
 
 FilePanel.winopts = vim.tbl_extend("force", Panel.winopts, {
@@ -89,6 +90,69 @@ function FilePanel:setup_buffer()
 end
 
 function FilePanel:update_components()
+  if self.files.is_grouped and self.files:is_grouped() then
+    local schema = { { name = "path" } }
+    local group_component_names = {}
+    local file_filter = function(file)
+      return self:should_show_file(file)
+    end
+
+    for i, group in ipairs(self.files.groups) do
+      local files_schema
+
+      if self.listing_style == "list" then
+        files_schema = { name = "files" }
+
+        for _, file in ipairs(group.files) do
+          if file_filter(file) then
+            table.insert(files_schema, {
+              name = "file",
+              context = file,
+            })
+          end
+        end
+      else
+        group.tree:update_statuses()
+        files_schema = utils.tbl_merge(
+          { name = "files" },
+          group.tree:create_comp_schema({
+            flatten_dirs = self.tree_options.flatten_dirs,
+            file_filter = file_filter,
+          })
+        )
+      end
+
+      local name = "group_" .. i
+      group_component_names[#group_component_names + 1] = name
+      table.insert(schema, {
+        name = name,
+        { name = "title" },
+        files_schema,
+        { name = "margin" },
+      })
+    end
+
+    table.insert(schema, {
+      name = "info",
+      { name = "title" },
+      { name = "entries" },
+    })
+
+    ---@type CompStruct
+    self.components = self.render_data:create_component(schema)
+    self.group_component_names = group_component_names
+
+    local cursor_targets = {}
+    for _, name in ipairs(group_component_names) do
+      cursor_targets[#cursor_targets + 1] = self.components[name].files.comp
+    end
+
+    self.constrain_cursor = renderer.create_cursor_constraint(cursor_targets)
+    return
+  end
+
+  self.group_component_names = nil
+
   local conflicting_files
   local working_files
   local staged_files
@@ -231,11 +295,20 @@ function FilePanel:ordered_file_list()
 
     files = list
   else
-    local nodes = utils.vec_join(
-      self.files.conflicting_tree.root:leaves(),
-      self.files.working_tree.root:leaves(),
-      self.files.staged_tree.root:leaves()
-    )
+    local nodes
+
+    if self.files.is_grouped and self.files:is_grouped() then
+      nodes = {}
+      for _, group in ipairs(self.files.groups) do
+        utils.vec_push(nodes, unpack(group.tree.root:leaves()))
+      end
+    else
+      nodes = utils.vec_join(
+        self.files.conflicting_tree.root:leaves(),
+        self.files.working_tree.root:leaves(),
+        self.files.staged_tree.root:leaves()
+      )
+    end
 
     files = vim.tbl_map(function(node)
       return node.data
@@ -336,11 +409,22 @@ function FilePanel:highlight_file(file)
   end
 
   if self.listing_style == "list" then
-    for _, file_list in ipairs({
-      self.components.conflicting.files,
-      self.components.working.files,
-      self.components.staged.files,
-    }) do
+    local file_lists
+
+    if self.files.is_grouped and self.files:is_grouped() then
+      file_lists = {}
+      for _, name in ipairs(self.group_component_names or {}) do
+        file_lists[#file_lists + 1] = self.components[name].files
+      end
+    else
+      file_lists = {
+        self.components.conflicting.files,
+        self.components.working.files,
+        self.components.staged.files,
+      }
+    end
+
+    for _, file_list in ipairs(file_lists) do
       for _, comp_struct in ipairs(file_list) do
         if file == comp_struct.comp.context then
           utils.set_cursor(self.winid, comp_struct.comp.lstart + 1, 0)
@@ -349,11 +433,22 @@ function FilePanel:highlight_file(file)
     end
 
   else -- tree
-    for _, comp_struct in ipairs({
-      self.components.conflicting.files,
-      self.components.working.files,
-      self.components.staged.files,
-    }) do
+    local file_lists
+
+    if self.files.is_grouped and self.files:is_grouped() then
+      file_lists = {}
+      for _, name in ipairs(self.group_component_names or {}) do
+        file_lists[#file_lists + 1] = self.components[name].files
+      end
+    else
+      file_lists = {
+        self.components.conflicting.files,
+        self.components.working.files,
+        self.components.staged.files,
+      }
+    end
+
+    for _, comp_struct in ipairs(file_lists) do
       comp_struct.comp:deep_some(function(cur)
         if file == cur.context then
           local was_concealed = false
