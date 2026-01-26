@@ -14,9 +14,10 @@ local M = {}
 local DEFAULT_CACHE_DIR = "~/.cache/diffview.nvim/reviews"
 
 ---@class ReviewEntry
----@field blob_hash string Git blob hash of the file content when marked reviewed
+---@field blob_hash string|nil Git blob hash of the file content when marked reviewed (nil for deleted files)
 ---@field reviewed_at number Unix timestamp of when the file was reviewed
 ---@field commit_hash? string Git commit hash when file was marked reviewed (optional for backward compatibility)
+---@field deleted? boolean True if the file was deleted when marked reviewed
 
 ---@class ReviewState : diffview.Object
 ---@operator call : ReviewState
@@ -45,14 +46,16 @@ end
 
 ---Mark a file as reviewed
 ---@param path string Relative path to the file in the repo
----@param blob_hash string Git blob hash of the file content
+---@param blob_hash string|nil Git blob hash of the file content (nil for deleted files)
 ---@param commit_hash? string Git commit hash at the time of review (optional for backward compatibility)
 ---@param skip_save? boolean If true, skip automatic save (useful for batch operations)
-function ReviewState:set_file_reviewed(path, blob_hash, commit_hash, skip_save)
+---@param deleted? boolean True if the file was deleted when marked reviewed
+function ReviewState:set_file_reviewed(path, blob_hash, commit_hash, skip_save, deleted)
   self.files[path] = {
-    blob_hash = blob_hash,
+    blob_hash = deleted and nil or blob_hash,
     reviewed_at = os.time(),
     commit_hash = commit_hash,  -- may be nil for legacy compatibility
+    deleted = deleted or nil,
   }
   self.dirty = true
   -- Trigger save asynchronously (unless skip_save is true for batch operations)
@@ -86,6 +89,9 @@ function ReviewState:get_file_status(path, current_blob_hash)
   local entry = self.files[path]
   if not entry then
     return "unreviewed"
+  end
+  if entry.deleted then
+    return current_blob_hash and "changed" or "reviewed"
   end
   if not current_blob_hash then
     return "reviewed"

@@ -1355,6 +1355,8 @@ function DiffView:get_since_review_entry(file_entry)
   local review_entry = self.review_state:get_file(file_entry.path)
   if not review_entry then return nil, "File has not been reviewed" end
 
+  if review_entry.deleted then return nil, "Review was saved for a deleted file" end
+
   if not review_entry.blob_hash then return nil, "Review was saved without blob information" end
 
   -- Verify the blob still exists (blobs are more resilient than commits)

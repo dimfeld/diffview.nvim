@@ -6,6 +6,13 @@ local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
 local M = {}
 
+---@param status? string
+---@return boolean
+local function is_deleted_status(status)
+  if not status or status == "" then return false end
+  return status:find("D", 1, true) ~= nil
+end
+
 ---Check if review mode is enabled
 ---@return boolean
 local function is_review_enabled()
@@ -54,13 +61,14 @@ function M.mark_file_reviewed(view, file_entry)
   end
 
   local blob_hash = get_file_blob_hash(view, file_entry)
-  if not blob_hash then
+  local is_deleted = not blob_hash and is_deleted_status(file_entry.status)
+  if not blob_hash and not is_deleted then
     utils.warn("Could not get blob hash for file: " .. file_entry.path)
     return false
   end
 
   local commit_hash = get_head_commit_hash(view)
-  view.review_state:set_file_reviewed(file_entry.path, blob_hash, commit_hash)
+  view.review_state:set_file_reviewed(file_entry.path, blob_hash, commit_hash, nil, is_deleted)
 
   -- Emit event for UI updates
   DiffviewGlobal.emitter:emit("review_file_marked", {
@@ -68,6 +76,7 @@ function M.mark_file_reviewed(view, file_entry)
     file_entry = file_entry,
     blob_hash = blob_hash,
     commit_hash = commit_hash,
+    deleted = is_deleted,
   })
 
   return true
@@ -96,9 +105,10 @@ function M.mark_all_reviewed(view)
   local count = 0
   for _, file_entry in view.files:iter() do
     local blob_hash = get_file_blob_hash(view, file_entry)
-    if blob_hash then
+    local is_deleted = not blob_hash and is_deleted_status(file_entry.status)
+    if blob_hash or is_deleted then
       -- Use skip_save=true to avoid saving on every file
-      view.review_state:set_file_reviewed(file_entry.path, blob_hash, commit_hash, true)
+      view.review_state:set_file_reviewed(file_entry.path, blob_hash, commit_hash, true, is_deleted)
       count = count + 1
 
       -- Emit event for each file
@@ -107,6 +117,7 @@ function M.mark_all_reviewed(view)
         file_entry = file_entry,
         blob_hash = blob_hash,
         commit_hash = commit_hash,
+        deleted = is_deleted,
       })
     end
   end

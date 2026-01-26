@@ -74,6 +74,37 @@ describe("diffview.review", function()
       assert.is_false(result)
     end)
 
+    it("allows marking deleted files without blob hash", function()
+      config._config = { review = { enabled = true } }
+
+      local marked_path, marked_hash, marked_commit, marked_deleted = nil, nil, nil, nil
+      local mock_review_state = {
+        set_file_reviewed = function(_, path, hash, commit_hash, _, deleted)
+          marked_path = path
+          marked_hash = hash
+          marked_commit = commit_hash
+          marked_deleted = deleted
+        end,
+      }
+      local mock_adapter = {
+        file_blob_hash = function()
+          return nil
+        end,
+        head_rev = function()
+          return { commit = "commit_sha_456" }
+        end,
+      }
+      local mock_view = { review_state = mock_review_state, adapter = mock_adapter }
+      local file_entry = { path = "src/deleted.lua", status = "D" }
+
+      local result = review.mark_file_reviewed(mock_view, file_entry)
+      assert.is_true(result)
+      assert.equals("src/deleted.lua", marked_path)
+      assert.is_nil(marked_hash)
+      assert.equals("commit_sha_456", marked_commit)
+      assert.is_true(marked_deleted)
+    end)
+
     it("returns true and marks file when everything is valid", function()
       config._config = { review = { enabled = true } }
 
@@ -293,6 +324,57 @@ describe("diffview.review", function()
       assert.equals("hash111", marked_files["src/foo.lua"])
       assert.is_nil(marked_files["src/deleted.lua"])
       assert.equals("hash333", marked_files["src/bar.lua"])
+    end)
+
+    it("marks deleted files without blob hash", function()
+      config._config = { review = { enabled = true } }
+
+      local marked_files = {}
+      local mock_store = { save_state = function() end }
+      local mock_review_state = {
+        set_file_reviewed = function(_, path, hash, commit_hash, skip_save, deleted)
+          marked_files[path] = { hash = hash, commit_hash = commit_hash, skip_save = skip_save, deleted = deleted }
+        end,
+        store = mock_store,
+      }
+      local file_entries = {
+        { path = "src/deleted.lua", status = "D" },
+        { path = "src/kept.lua" },
+      }
+      local blob_hashes = {
+        ["src/deleted.lua"] = nil,
+        ["src/kept.lua"] = "hash222",
+      }
+      local mock_files = {
+        iter = function()
+          local idx = 0
+          return function()
+            idx = idx + 1
+            if idx <= #file_entries then
+              return idx, file_entries[idx]
+            end
+          end
+        end,
+      }
+      local mock_adapter = {
+        file_blob_hash = function(_, path, rev)
+          return blob_hashes[path]
+        end,
+        head_rev = function()
+          return { commit = "head_commit_sha" }
+        end,
+      }
+      local mock_view = {
+        review_state = mock_review_state,
+        adapter = mock_adapter,
+        files = mock_files,
+      }
+
+      local result = review.mark_all_reviewed(mock_view)
+      assert.equals(2, result)
+      assert.is_true(marked_files["src/deleted.lua"].deleted)
+      assert.is_nil(marked_files["src/deleted.lua"].hash)
+      assert.equals("hash222", marked_files["src/kept.lua"].hash)
     end)
 
     it("uses batch save: calls set_file_reviewed with skip_save=true and saves once at end", function()

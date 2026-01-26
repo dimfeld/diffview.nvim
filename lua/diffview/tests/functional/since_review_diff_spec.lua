@@ -396,6 +396,31 @@ describe("since-review diff mode", function()
       eq("Review was saved without blob information", err)
     end)
 
+    it("returns error when review entry was for a deleted file", function()
+      local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
+
+      local file = create_file_entry("src/file.lua")
+      local review_entry = {
+        deleted = true,
+        reviewed_at = os.time(),
+        commit_hash = "abc123",
+      }
+
+      local mock_view = {
+        review_state = create_mock_review_state({
+          ["src/file.lua"] = review_entry,
+        }),
+        adapter = create_mock_adapter(),
+      }
+
+      mock_view.get_since_review_entry = DiffView.get_since_review_entry
+      mock_view.verify_blob_exists = DiffView.verify_blob_exists
+
+      local result, err = mock_view:get_since_review_entry(file)
+      eq(nil, result)
+      eq("Review was saved for a deleted file", err)
+    end)
+
     it("returns error when reviewed blob no longer exists (garbage collected)", function()
       local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
 
