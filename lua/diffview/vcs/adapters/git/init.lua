@@ -41,21 +41,21 @@ GitAdapter.bootstrap = {
     major = 2,
     minor = 31,
     patch = 0,
-  }
+  },
 }
 
 GitAdapter.COMMIT_PRETTY_FMT = (
-  "%H %P"      -- Commit hash followed by parent hashes
-  .. "%n%an"   -- Author name
-  .. "%n%at"   -- Author date: UNIX timestamp
-  .. "%n%ai"   -- Author date: ISO (gives us timezone)
-  .. "%n%ar"   -- Author date: relative
-  .. "%n..%D"  -- Ref names
+  "%H %P" -- Commit hash followed by parent hashes
+  .. "%n%an" -- Author name
+  .. "%n%at" -- Author date: UNIX timestamp
+  .. "%n%ai" -- Author date: ISO (gives us timezone)
+  .. "%n%ar" -- Author date: relative
+  .. "%n..%D" -- Ref names
   .. "%n..%gd" -- Reflog selectors
-  .. "%n..%s"  -- Subject
-  -- The leading dots here are only used for padding to ensure those lines
-  -- won't ever be completetely empty. This way the lines will be
-  -- distinguishable from other empty lines outputted by Git.
+  .. "%n..%s" -- Subject-- The leading dots here are only used for padding to ensure those lines-- won't ever be completetely empty. This way the lines will be
+-- distinguishable from other empty lines outputted by Git.
+
+
 )
 
 ---@return string, string
@@ -71,9 +71,7 @@ end
 
 function GitAdapter.pathspec_expand(toplevel, cwd, pathspec)
   local magic, pattern = GitAdapter.pathspec_split(pathspec)
-  if not pl:is_abs(pattern) then
-    pattern = pl:join(pl:relative(cwd, toplevel), pattern)
-  end
+  if not pl:is_abs(pattern) then pattern = pl:join(pl:relative(cwd, toplevel), pattern) end
   return magic .. pl:convert(pattern)
 end
 
@@ -101,9 +99,7 @@ function GitAdapter.run_bootstrap()
   local out = utils.job(utils.flatten({ git_cmd, "version" }))
   bs.version_string = out[1] and out[1]:match("git version (%S+)") or nil
 
-  if not bs.version_string then
-    return err("Could not get Git version!")
-  end
+  if not bs.version_string then return err("Could not get Git version!") end
 
   -- Parse version string
   local v, target = bs.version, bs.target_version
@@ -116,12 +112,14 @@ function GitAdapter.run_bootstrap()
   local version_ok = vcs_utils.check_semver(v, target)
 
   if not version_ok then
-    return err(string.format(
-      "Git version is outdated! Some functionality might not work as expected, "
-        .. "or not at all! Current: %s, wanted: %s",
-      bs.version_string,
-      bs.target_version_string
-    ))
+    return err(
+      string.format(
+        "Git version is outdated! Some functionality might not work as expected, "
+          .. "or not at all! Current: %s, wanted: %s",
+        bs.version_string,
+        bs.target_version_string
+      )
+    )
   end
 
   bs.ok = true
@@ -136,7 +134,9 @@ function GitAdapter.get_repo_paths(path_args, cpath)
   local top_indicators = {}
 
   for _, path_arg in ipairs(path_args) do
-    for _, path in ipairs(pl:vim_expand(path_arg, false, true) --[[@as string[] ]]) do
+    for _, path in
+      ipairs(pl:vim_expand(path_arg, false, true) --[[@as string[] ]])
+    do
       local magic, pattern = GitAdapter.pathspec_split(path)
       pattern = pl:readlink(pattern) or pattern
       table.insert(paths, magic .. pattern)
@@ -153,15 +153,12 @@ function GitAdapter.get_repo_paths(path_args, cpath)
     end
   end
 
-  table.insert(top_indicators, cpath and pl:realpath(cpath) or (
-    vim.bo.buftype == ""
-    and pl:absolute(cfile)
-    or nil
-  ))
+  table.insert(
+    top_indicators,
+    cpath and pl:realpath(cpath) or (vim.bo.buftype == "" and pl:absolute(cfile) or nil)
+  )
 
-  if not cpath then
-    table.insert(top_indicators, pl:realpath("."))
-  end
+  if not cpath then table.insert(top_indicators, pl:realpath(".")) end
 
   return paths, top_indicators
 end
@@ -170,13 +167,14 @@ end
 ---@param path string
 ---@return string?
 local function get_toplevel(path)
-  local out, code = utils.job(utils.flatten({
-    config.get_config().git_cmd,
-    { "rev-parse", "--path-format=absolute", "--show-toplevel" },
-  }), path)
-  if code ~= 0 then
-    return nil
-  end
+  local out, code = utils.job(
+    utils.flatten({
+      config.get_config().git_cmd,
+      { "rev-parse", "--path-format=absolute", "--show-toplevel" },
+    }),
+    path
+  )
+  if code ~= 0 then return nil end
   return out[1] and vim.trim(out[1])
 end
 
@@ -195,9 +193,7 @@ function GitAdapter.find_toplevel(top_indicators)
 
     if p and pl:readable(p) then
       toplevel = get_toplevel(p)
-      if toplevel then
-        return nil, toplevel
-      end
+      if toplevel then return nil, toplevel end
     end
   end
 
@@ -206,10 +202,7 @@ function GitAdapter.find_toplevel(top_indicators)
     return utils.str_quote(rel_path == "" and "." or rel_path)
   end, top_indicators) --[[@as vector ]]
 
-  local err = fmt(
-    "Path not a git repo (or any parent): %s",
-    table.concat(msg_paths, ", ")
-  )
+  local err = fmt("Path not a git repo (or any parent): %s", table.concat(msg_paths, ", "))
 
   return err, ""
 end
@@ -252,17 +245,16 @@ function GitAdapter:init(opt)
   self.ctx = {
     toplevel = opt.toplevel,
     dir = self:get_dir(opt.toplevel),
-    path_args = vim.tbl_map(function(pathspec)
-      return GitAdapter.pathspec_expand(opt.toplevel, cwd, pathspec)
-    end, opt.path_args or {}) --[[@as string[] ]]
+    path_args = vim.tbl_map(
+      function(pathspec) return GitAdapter.pathspec_expand(opt.toplevel, cwd, pathspec) end,
+      opt.path_args or {}
+    ) --[[@as string[] ]],
   }
 
   self:init_completion()
 end
 
-function GitAdapter:get_command()
-  return config.get_config().git_cmd
-end
+function GitAdapter:get_command() return config.get_config().git_cmd end
 
 ---@param path string
 ---@param rev Rev?
@@ -276,9 +268,7 @@ end
 
 function GitAdapter:get_dir(path)
   local out, code = self:exec_sync({ "rev-parse", "--path-format=absolute", "--git-dir" }, path)
-  if code ~= 0 then
-    return nil
-  end
+  if code ~= 0 then return nil end
   return out[1] and vim.trim(out[1])
 end
 
@@ -311,14 +301,16 @@ function GitAdapter:get_merge_context()
   end
 
   local ret = {}
-  local out, code = self:exec_sync({ "show", "-s", "--pretty=format:%H%n%D", "HEAD", "--" }, self.ctx.toplevel)
+  local out, code =
+    self:exec_sync({ "show", "-s", "--pretty=format:%H%n%D", "HEAD", "--" }, self.ctx.toplevel)
 
   ret.ours = code ~= 0 and {} or {
     hash = out[1],
     ref_names = out[2],
   }
 
-  out, code = self:exec_sync({ "show", "-s", "--pretty=format:%H%n%D", their_head, "--" }, self.ctx.toplevel)
+  out, code =
+    self:exec_sync({ "show", "-s", "--pretty=format:%H%n%D", their_head, "--" }, self.ctx.toplevel)
 
   ret.theirs = code ~= 0 and {} or {
     hash = out[1],
@@ -348,9 +340,7 @@ end
 function GitAdapter:prepare_fh_options(log_options, single_file)
   local o = log_options
   local line_trace = vim.tbl_map(function(v)
-    if not v:match("^-L") then
-      return "-L" .. v
-    end
+    if not v:match("^-L") then return "-L" .. v end
     return v
   end, o.L or {})
 
@@ -406,7 +396,7 @@ function GitAdapter:prepare_fh_options(log_options, single_file)
       o.S and { "-S" .. o.S, "--pickaxe-regex" } or nil,
       o.after and { "--after=" .. o.after } or nil,
       o.before and { "--before=" .. o.before } or nil
-    )
+    ),
   }
 end
 
@@ -486,14 +476,11 @@ local function structure_fh_data(stat_data, keep_diff)
   ret.namestat = namestat
   ret.numstat = numstat
 
-  if keep_diff then
-    ret.diff = vcs_utils.parse_diff(stat_data)
-  end
+  if keep_diff then ret.diff = vcs_utils.parse_diff(stat_data) end
 
   -- Soft validate the data
-  ret.valid = #namestat == #numstat and pcall(
-    vim.validate,
-    {
+  ret.valid = #namestat == #numstat
+    and pcall(vim.validate, {
       left_hash = { ret.left_hash, "string", true },
       right_hash = { ret.right_hash, "string" },
       merge_hash = { ret.merge_hash, "string", true },
@@ -504,8 +491,7 @@ local function structure_fh_data(stat_data, keep_diff)
       ref_names = { ret.ref_names, "string" },
       reflog_selector = { ret.reflog_selector, "string" },
       subject = { ret.subject, "string" },
-    }
-  )
+    })
 
   return ret
 end
@@ -552,12 +538,12 @@ function GitAdapter:stream_fh_data(state)
         stream:push({
           JobStatus.ERROR,
           nil,
-          table.concat(utils.vec_join(err, job.stderr), "\n")
+          table.concat(utils.vec_join(err, job.stderr), "\n"),
         })
       else
         stream:push({ JobStatus.SUCCESS })
       end
-    end
+    end,
   })
 
   job = Job({
@@ -631,12 +617,12 @@ function GitAdapter:stream_line_trace_data(state)
         stream:push({
           JobStatus.ERROR,
           nil,
-          table.concat(utils.vec_join(err, job.stderr), "\n")
+          table.concat(utils.vec_join(err, job.stderr), "\n"),
         })
       else
         stream:push({ JobStatus.SUCCESS })
       end
-    end
+    end,
   })
 
   job = Job({
@@ -675,16 +661,13 @@ function GitAdapter:is_single_file(path_args, lflags)
     local seen = {}
     for i, v in ipairs(lflags) do
       local path = v:match(".*:(.*)")
-      if i > 1 and not seen[path] then
-        return false
-      end
+      if i > 1 and not seen[path] then return false end
       seen[path] = true
     end
-
   elseif path_args and self.ctx.toplevel then
     return #path_args == 1
-        and not pl:is_dir(path_args[1])
-        and #self:exec_sync({ "ls-files", "--", path_args }, self.ctx.toplevel) < 2
+      and not pl:is_dir(path_args[1])
+      and #self:exec_sync({ "ls-files", "--", path_args }, self.ctx.toplevel) < 2
   end
 
   return true
@@ -696,9 +679,10 @@ function GitAdapter:file_history_dry_run(log_opt)
   local single_file = self:is_single_file(log_opt.path_args, log_opt.L)
   local log_options = config.get_log_options(single_file, log_opt, "git") --[[@as GitLogOptions ]]
 
-  local options = vim.tbl_map(function(v)
-    return vim.fn.shellescape(v)
-  end, self:prepare_fh_options(log_options, single_file).flags) --[[@as vector ]]
+  local options = vim.tbl_map(
+    function(v) return vim.fn.shellescape(v) end,
+    self:prepare_fh_options(log_options, single_file).flags
+  ) --[[@as vector ]]
 
   local description = utils.vec_join(
     fmt("Top-level path: '%s'", pl:vim_fnamemodify(self.ctx.toplevel, ":~")),
@@ -736,12 +720,9 @@ function GitAdapter:file_history_dry_run(log_opt)
 
   local ok = code == 0 and #out > 0
 
-  if not ok then
-    logger:fmt_debug("[%s] Dry run failed.", context)
-  end
+  if not ok then logger:fmt_debug("[%s] Dry run failed.", context) end
 
   return ok, table.concat(description, ", ")
-
 end
 
 ---@param range? { [1]: integer, [2]: integer }
@@ -753,9 +734,10 @@ function GitAdapter:file_history_options(range, paths, argo)
 
   logger:fmt_debug("Found git top-level: %s", utils.str_quote(self.ctx.toplevel))
 
-  local rel_paths = vim.tbl_map(function(v)
-    return v == "." and "." or pl:relative(v, ".")
-  end, paths) --[[@as string[] ]]
+  local rel_paths = vim.tbl_map(
+    function(v) return v == "." and "." or pl:relative(v, ".") end,
+    paths
+  ) --[[@as string[] ]]
 
   ---@type string
   local range_arg = argo:get_flag("range", { no_empty = true })
@@ -807,7 +789,7 @@ function GitAdapter:file_history_options(range, paths, argo)
   if range then
     paths, rel_paths = {}, {}
     log_options.L = {
-      fmt("%d,%d:%s", range[1], range[2], pl:relative(pl:absolute(cfile), self.ctx.toplevel))
+      fmt("%d,%d:%s", range[1], range[2], pl:relative(pl:absolute(cfile), self.ctx.toplevel)),
     }
   end
 
@@ -835,10 +817,7 @@ function GitAdapter:file_history_options(range, paths, argo)
 
   if not self.ctx.dir then
     utils.err(
-      fmt(
-        "Failed to find the git dir for the repository: %s",
-        utils.str_quote(self.ctx.toplevel)
-      )
+      fmt("Failed to find the git dir for the repository: %s", utils.str_quote(self.ctx.toplevel))
     )
     return
   end
@@ -858,10 +837,8 @@ end
 ---@param out_stream AsyncListStream
 ---@param opt vcs.adapter.FileHistoryWorkerSpec
 GitAdapter.file_history_worker = async.void(function(self, out_stream, opt)
-  local single_file = self:is_single_file(
-    opt.log_opt.single_file.path_args,
-    opt.log_opt.single_file.L
-  )
+  local single_file =
+    self:is_single_file(opt.log_opt.single_file.path_args, opt.log_opt.single_file.L)
 
   ---@type GitLogOptions
   local log_options = config.get_log_options(
@@ -910,7 +887,7 @@ GitAdapter.file_history_worker = async.void(function(self, out_stream, opt)
     -- Make sure to yield to the scheduler periodically to keep the editor
     -- responsive.
     local now = uv.hrtime()
-    if (now - last_wait > interval) then
+    if now - last_wait > interval then
       last_wait = now
       await(async.schedule_now())
     end
@@ -950,13 +927,11 @@ GitAdapter.file_history_worker = async.void(function(self, out_stream, opt)
 
       logger:fmt_warn("Received malformed or insufficient data for '%s'! Retrying...", rev_arg)
       logger:debug(new_data)
-      err, new_data = await(
-        self:fh_retry_commit(rev_arg, state, {
-          is_merge = is_merge,
-          retry_count = not is_merge and 2,
-          keep_diff = is_trace,
-        })
-      )
+      err, new_data = await(self:fh_retry_commit(rev_arg, state, {
+        is_merge = is_merge,
+        retry_count = not is_merge and 2,
+        keep_diff = is_trace,
+      }))
 
       if err then
         if err.name == "job_fail" then
@@ -1152,9 +1127,7 @@ function GitAdapter:parse_fh_data(data, commit, state)
       oldname = namestat_fields[2]
       name = namestat_fields[3]
 
-      if state.single_file then
-        state.old_path = oldname
-      end
+      if state.single_file then state.old_path = oldname end
     else
       name = namestat_fields[2]
     end
@@ -1164,38 +1137,34 @@ function GitAdapter:parse_fh_data(data, commit, state)
       deletions = tonumber(data.numstat[i]:match("^%d+%s+(%d+)")),
     }
 
-    if not stats.additions or not stats.deletions then
-      stats = nil
-    end
+    if not stats.additions or not stats.deletions then stats = nil end
 
     table.insert(
       files,
-      FileEntry.with_layout(
-        state.layout_opt.default_layout or Diff2Hor,
-        {
-          adapter = self,
-          path = name,
-          oldpath = oldname,
-          status = status,
-          stats = stats,
-          kind = "working",
-          commit = commit,
-          revs = {
-            a = data.left_hash and GitRev(RevType.COMMIT, data.left_hash) or GitRev.new_null_tree(),
-            b = state.prepared_log_opts.base or GitRev(RevType.COMMIT, data.right_hash),
-          },
-        }
-      )
+      FileEntry.with_layout(state.layout_opt.default_layout or Diff2Hor, {
+        adapter = self,
+        path = name,
+        oldpath = oldname,
+        status = status,
+        stats = stats,
+        kind = "working",
+        commit = commit,
+        revs = {
+          a = data.left_hash and GitRev(RevType.COMMIT, data.left_hash) or GitRev.new_null_tree(),
+          b = state.prepared_log_opts.base or GitRev(RevType.COMMIT, data.right_hash),
+        },
+      })
     )
   end
 
   if files[1] then
-    return true, LogEntry({
-      path_args = state.path_args,
-      commit = commit,
-      files = files,
-      single_file = state.single_file,
-    })
+    return true,
+      LogEntry({
+        path_args = state.path_args,
+        commit = commit,
+        files = files,
+        single_file = state.single_file,
+      })
   end
 
   if state.path_args[1] then
@@ -1205,11 +1174,12 @@ function GitAdapter:parse_fh_data(data, commit, state)
   end
 
   -- Commit is likely identical to it's parent. Return an empty log entry.
-  return true, LogEntry.new_null_entry(self, {
-    path_args = state.path_args,
-    commit = commit,
-    single_file = state.single_file,
-  })
+  return true,
+    LogEntry.new_null_entry(self, {
+      path_args = state.path_args,
+      commit = commit,
+      single_file = state.single_file,
+    })
 end
 
 ---@param data GitAdapter.LogData
@@ -1223,37 +1193,32 @@ function GitAdapter:parse_fh_line_trace_data(data, commit, state)
   for _, entry in ipairs(data.diff) do
     local oldpath = entry.path_old ~= entry.path_new and entry.path_old or nil
 
-    if state.single_file and oldpath then
-      state.old_path = oldpath
-    end
+    if state.single_file and oldpath then state.old_path = oldpath end
 
     table.insert(
       files,
-      FileEntry.with_layout(state.layout_opt.default_layout or Diff2Hor,
-        {
-          adapter = self,
-          path = entry.path_new,
-          oldpath = oldpath,
-          kind = "working",
-          commit = commit,
-          revs = {
-            a = data.left_hash
-                and GitRev(RevType.COMMIT, data.left_hash)
-                or GitRev.new_null_tree(),
-            b = state.prepared_log_opts.base or GitRev(RevType.COMMIT, data.right_hash),
-          },
-        }
-      )
+      FileEntry.with_layout(state.layout_opt.default_layout or Diff2Hor, {
+        adapter = self,
+        path = entry.path_new,
+        oldpath = oldpath,
+        kind = "working",
+        commit = commit,
+        revs = {
+          a = data.left_hash and GitRev(RevType.COMMIT, data.left_hash) or GitRev.new_null_tree(),
+          b = state.prepared_log_opts.base or GitRev(RevType.COMMIT, data.right_hash),
+        },
+      })
     )
   end
 
   if files[1] then
-    return true, LogEntry({
-      path_args = state.path_args,
-      commit = commit,
-      files = files,
-      single_file = state.single_file,
-    })
+    return true,
+      LogEntry({
+        path_args = state.path_args,
+        commit = commit,
+        files = files,
+        single_file = state.single_file,
+      })
   end
 
   logger:debug("[GitAdapter:parse_fh_data] Encountered commit with no file data:", data)
@@ -1270,9 +1235,7 @@ function GitAdapter:diffview_options(argo)
     imply_local = argo:get_flag("imply-local"),
   })
 
-  if not (left and right) then
-    return
-  end
+  if not (left and right) then return end
 
   logger:fmt_debug("Parsed revs: left = %s, right = %s", left, right)
 
@@ -1289,7 +1252,7 @@ function GitAdapter:diffview_options(argo)
       or nil,
   }
 
-  return {left = left, right = right, options = options}
+  return { left = left, right = right, options = options }
 end
 
 ---@return Rev?
@@ -1299,9 +1262,7 @@ function GitAdapter:head_rev()
     { cwd = self.ctx.toplevel, retry = 2, fail_on_empty = true }
   )
 
-  if code ~= 0 then
-    return
-  end
+  if code ~= 0 then return end
 
   local s = vim.trim(out[1]):gsub("^%^", "")
 
@@ -1319,19 +1280,20 @@ function GitAdapter:get_current_branch()
     local jj_out, jj_code = utils.job({
       "jj",
       "log",
-      "-r", "latest(heads(ancestors(@) & bookmarks()), 1)",
-      "--limit", "1",
+      "-r",
+      "latest(heads(ancestors(@) & (bookmarks() | remote_bookmarks())), 1)",
+      "--limit",
+      "1",
       "--no-graph",
       "--ignore-working-copy",
-      "-T", "local_bookmarks",
+      "-T",
+      "bookmarks",
     }, { cwd = self.ctx.toplevel, silent = true })
 
     if jj_code == 0 and jj_out and #jj_out > 0 then
-      -- Remove asterisks and trim whitespace
-      local branch = vim.trim(jj_out[1]):gsub("%*", "")
-      if branch ~= "" then
-        return branch
-      end
+      -- Remove asterisks, trim whitespace, and strip everything after @
+      local branch = vim.trim(jj_out[1]):gsub("%*", ""):gsub("@.*", "")
+      if branch ~= "" then return branch end
     end
     -- Fall through to Git behavior if JJ command fails or returns empty
   end
@@ -1358,9 +1320,7 @@ function GitAdapter:get_current_branch()
       fail_on_empty = true,
     })
 
-    if code ~= 0 or not out or #out == 0 then
-      return "unknown"
-    end
+    if code ~= 0 or not out or #out == 0 then return "unknown" end
 
     return "detached-" .. vim.trim(out[1])
   end
@@ -1380,9 +1340,7 @@ function GitAdapter:get_current_branch()
       fail_on_empty = true,
     })
 
-    if code ~= 0 or not out or #out == 0 then
-      return "detached-unknown"
-    end
+    if code ~= 0 or not out or #out == 0 then return "detached-unknown" end
 
     return "detached-" .. vim.trim(out[1])
   end
@@ -1405,9 +1363,7 @@ function GitAdapter:get_all_branches()
     "refs/heads/",
   }, { cwd = self.ctx.toplevel, silent = true })
 
-  if local_code ~= 0 then
-    return nil
-  end
+  if local_code ~= 0 then return nil end
 
   for _, line in ipairs(local_out or {}) do
     if line ~= "" and not seen[line] then
@@ -1424,9 +1380,7 @@ function GitAdapter:get_all_branches()
     "refs/remotes/",
   }, { cwd = self.ctx.toplevel, silent = true })
 
-  if remote_code ~= 0 then
-    return nil
-  end
+  if remote_code ~= 0 then return nil end
 
   for _, line in ipairs(remote_out or {}) do
     if line ~= "" and not seen[line] then
@@ -1452,7 +1406,7 @@ function GitAdapter:file_blob_hash(path, rev_arg)
   local out, code = self:exec_sync({
     "rev-parse",
     "--revs-only",
-    fmt("%s:%s", rev_arg or "", path)
+    fmt("%s:%s", rev_arg or "", path),
   }, {
     cwd = self.ctx.toplevel,
     retry = 2,
@@ -1470,9 +1424,7 @@ end
 ---@param rev_arg string? Revision argument (default: "HEAD")
 ---@return table<string, string|nil> Map of path -> blob_hash (nil for missing/error paths)
 function GitAdapter:file_blob_hashes_batch(paths, rev_arg)
-  if not paths or #paths == 0 then
-    return {}
-  end
+  if not paths or #paths == 0 then return {} end
 
   rev_arg = rev_arg or "HEAD"
   return self:_file_blob_hashes_via_ls_tree(paths, rev_arg)
@@ -1485,9 +1437,7 @@ end
 ---@return table<string, string|nil> Map of path -> blob_hash
 ---@private
 function GitAdapter:_file_blob_hashes_via_ls_tree(paths, rev_arg)
-  if not paths or #paths == 0 then
-    return {}
-  end
+  if not paths or #paths == 0 then return {} end
 
   local result = {}
   -- Initialize all paths to nil
@@ -1512,7 +1462,7 @@ function GitAdapter:_file_blob_hashes_via_ls_tree(paths, rev_arg)
     local out, code = self:exec_sync(
       utils.vec_join(
         "ls-tree",
-        "-z",  -- NUL-separated output
+        "-z", -- NUL-separated output
         rev_arg,
         "--",
         chunk_paths
@@ -1532,9 +1482,7 @@ function GitAdapter:_file_blob_hashes_via_ls_tree(paths, rev_arg)
       for _, entry in ipairs(entries) do
         -- Parse: "<mode> <type> <hash>\t<path>"
         local hash, path = entry:match("^%d+ %w+ (%x+)\t(.+)$")
-        if hash and path then
-          result[path] = hash
-        end
+        if hash and path then result[path] = hash end
       end
     end
   end
@@ -1552,29 +1500,21 @@ function GitAdapter:symmetric_diff_revs(rev_arg)
   local out, code, stderr
 
   local function err()
-    utils.err(utils.vec_join(
-      fmt("Failed to parse rev '%s'!", rev_arg),
-      "Git output: ",
-      stderr
-    ))
+    utils.err(utils.vec_join(fmt("Failed to parse rev '%s'!", rev_arg), "Git output: ", stderr))
   end
 
   out, code, stderr = self:exec_sync(
     { "merge-base", r1, r2 },
     { cwd = self.ctx.toplevel, fail_on_empty = true, retry = 2 }
   )
-  if code ~= 0 then
-    return err()
-  end
+  if code ~= 0 then return err() end
   local left_hash = out[1]:gsub("^%^", "")
 
   out, code, stderr = self:exec_sync(
     { "rev-parse", "--revs-only", r2 },
     { cwd = self.ctx.toplevel, fail_on_empty = true, retry = 2 }
   )
-  if code ~= 0 then
-    return err()
-  end
+  if code ~= 0 then return err() end
   local right_hash = out[1]:gsub("^%^", "")
 
   return GitRev(RevType.COMMIT, left_hash), GitRev(RevType.COMMIT, right_hash)
@@ -1632,11 +1572,13 @@ function GitAdapter:parse_revs(rev_arg, opt)
       { cwd = self.ctx.toplevel, fail_on_empty = true, retry = 2 }
     )
     if code ~= 0 then
-      utils.err(utils.vec_join(
-        fmt("Failed to parse rev %s!", utils.str_quote(rev_arg)),
-        "Git output: ",
-        stderr
-      ))
+      utils.err(
+        utils.vec_join(
+          fmt("Failed to parse rev %s!", utils.str_quote(rev_arg)),
+          "Git output: ",
+          stderr
+        )
+      )
       return
     elseif #rev_strings == 0 then
       utils.err("Bad revision: " .. utils.str_quote(rev_arg))
@@ -1683,12 +1625,8 @@ function GitAdapter:imply_local(left, right, head)
     return left, GitRev(RevType.LOCAL)
   end
 
-  if left.commit == head.commit then
-    left = GitRev(RevType.LOCAL)
-  end
-  if right.commit == head.commit then
-    right = GitRev(RevType.LOCAL)
-  end
+  if left.commit == head.commit then left = GitRev(RevType.LOCAL) end
+  if right.commit == head.commit then right = GitRev(RevType.LOCAL) end
 
   return left, right
 end
@@ -1705,17 +1643,14 @@ function GitAdapter:rev_to_args(left, right)
 
   if left.type == RevType.COMMIT and right.type == RevType.COMMIT then
     return { left.commit .. ".." .. right.commit }
-
   elseif left.type == RevType.COMMIT and right.type == RevType.STAGE then
     return { "--cached", left.commit }
-
   elseif right.type == RevType.LOCAL then
     if left.type == RevType.STAGE then
       return {}
     elseif left.type == RevType.COMMIT then
       return { left.commit }
     end
-
   elseif left.type == RevType.LOCAL then
     -- WARN: these require special handling when creating the diff file list.
     -- I.e. the stats for 'additions' and 'deletions' need to be swapped.
@@ -1728,7 +1663,6 @@ function GitAdapter:rev_to_args(left, right)
 
   error(fmt("InvalidArgument :: Unsupported rev range: '%s..%s'!", left, right))
 end
-
 
 ---@param self GitAdapter
 ---@param path string
@@ -1752,7 +1686,10 @@ GitAdapter.file_restore = async.wrap(function(self, path, kind, commit, callback
     -- Wite file blob into db
     out, code = self:exec_sync({ "hash-object", "-w", "--", path }, self.ctx.toplevel)
     if code ~= 0 then
-      utils.err("Failed to write file blob into the object database. Aborting file restoration.", true)
+      utils.err(
+        "Failed to write file blob into the object database. Aborting file restoration.",
+        true
+      )
       callback(false)
       return
     end
@@ -1774,7 +1711,7 @@ GitAdapter.file_restore = async.wrap(function(self, path, kind, commit, callback
       if not ok then
         utils.err({
           fmt("Failed to delete buffer '%d'! Aborting file restoration. Error message:", bn),
-          err
+          err,
         }, true)
         callback(false)
         return
@@ -1787,17 +1724,14 @@ GitAdapter.file_restore = async.wrap(function(self, path, kind, commit, callback
       if not ok then
         utils.err({
           fmt("Failed to delete file '%s'! Aborting file restoration. Error message:", abs_path),
-          err
+          err,
         }, true)
         callback(false)
         return
       end
     else
       -- File only exists in index
-      out, code = self:exec_sync(
-        { "rm", "-f", "--", path },
-        self.ctx.toplevel
-      )
+      out, code = self:exec_sync({ "rm", "-f", "--", path }, self.ctx.toplevel)
     end
   else
     -- File exists in history: checkout
@@ -1944,19 +1878,16 @@ GitAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, op
     log_opt = log_opt,
   })
 
-  local multi_job = MultiJob(
-    { namestat_job, numstat_job },
-    {
-      retry = 2,
-      fail_cond = function()
-        local sign = utils.sign(#namestat_job.stdout - #numstat_job.stdout)
-        if sign == 0 then return true end
-        local failed = sign < 0 and namestat_job or numstat_job
+  local multi_job = MultiJob({ namestat_job, numstat_job }, {
+    retry = 2,
+    fail_cond = function()
+      local sign = utils.sign(#namestat_job.stdout - #numstat_job.stdout)
+      if sign == 0 then return true end
+      local failed = sign < 0 and namestat_job or numstat_job
 
-        return false, { failed }, "Inbalance in diff data!"
-      end,
-    }
-  )
+      return false, { failed }, "Inbalance in diff data!"
+    end,
+  })
 
   local ok, err = await(multi_job)
 
@@ -1986,9 +1917,7 @@ GitAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, op
       deletions = tonumber(numstat_out[i]:match("^%d+%s+(%d+)")),
     }
 
-    if not stats.additions or not stats.deletions then
-      stats = nil
-    end
+    if not stats.additions or not stats.deletions then stats = nil end
 
     if not (status == "U" and kind == "staged") then
       table.insert(data, {
@@ -1999,30 +1928,29 @@ GitAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, op
       })
     end
 
-    if status == "U" then
-      conflict_map[name] = data[#data]
-    end
+    if status == "U" then conflict_map[name] = data[#data] end
   end
 
   if kind == "working" and next(conflict_map) then
-    data = vim.tbl_filter(function(v)
-      return not conflict_map[v.name]
-    end, data)
+    data = vim.tbl_filter(function(v) return not conflict_map[v.name] end, data)
 
     for _, v in pairs(conflict_map) do
-      table.insert(conflicts, FileEntry.with_layout(opt.merge_layout, {
-        adapter = self,
-        path = v.name,
-        oldpath = v.oldname,
-        status = "U",
-        kind = "conflicting",
-        revs = {
-          a = self.Rev(RevType.STAGE, 2),  -- ours
-          b = self.Rev(RevType.LOCAL),     -- local
-          c = self.Rev(RevType.STAGE, 3),  -- theirs
-          d = self.Rev(RevType.STAGE, 1),  -- base
-        },
-      }))
+      table.insert(
+        conflicts,
+        FileEntry.with_layout(opt.merge_layout, {
+          adapter = self,
+          path = v.name,
+          oldpath = v.oldname,
+          status = "U",
+          kind = "conflicting",
+          revs = {
+            a = self.Rev(RevType.STAGE, 2), -- ours
+            b = self.Rev(RevType.LOCAL), -- local
+            c = self.Rev(RevType.STAGE, 3), -- theirs
+            d = self.Rev(RevType.STAGE, 1), -- base
+          },
+        })
+      )
     end
   end
 
@@ -2037,7 +1965,7 @@ GitAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, op
       revs = {
         a = left,
         b = right,
-      }
+      },
     })
 
     if left and left.type == RevType.LOCAL then
@@ -2066,7 +1994,7 @@ GitAdapter.untracked_files = async.wrap(function(self, left, right, opt, callbac
       "--exclude-standard"
     ),
     cwd = self.ctx.toplevel,
-    log_opt = { label = "GitAdapter:untracked_files()", }
+    log_opt = { label = "GitAdapter:untracked_files()" },
   })
 
   local ok = await(job)
@@ -2078,16 +2006,19 @@ GitAdapter.untracked_files = async.wrap(function(self, left, right, opt, callbac
 
   local files = {}
   for _, s in ipairs(job.stdout) do
-    table.insert(files, FileEntry.with_layout(opt.default_layout, {
-      adapter = self,
-      path = s,
-      status = "?",
-      kind = "working",
-      revs = {
-        a = left,
-        b = right,
-      }
-    }))
+    table.insert(
+      files,
+      FileEntry.with_layout(opt.default_layout, {
+        adapter = self,
+        path = s,
+        status = "?",
+        kind = "working",
+        revs = {
+          a = left,
+          b = right,
+        },
+      })
+    )
   end
 
   callback(nil, files)
@@ -2121,24 +2052,20 @@ end
 ---@param rev Rev
 ---@return boolean -- True if the file was binary for the given rev, or it didn't exist.
 function GitAdapter:is_binary(path, rev)
-  if rev.type == RevType.STAGE and rev.stage > 0 then
-    return false
-  end
+  if rev.type == RevType.STAGE and rev.stage > 0 then return false end
 
   -- CUSTOM type is used when caller provides get_data function (e.g., since-review mode)
   -- The caller is responsible for the data, so we can't check if it's binary
-  if rev.type == RevType.CUSTOM then
-    return false
-  end
+  if rev.type == RevType.CUSTOM then return false end
 
   local cmd = { "-c", "submodule.recurse=false", "grep", "-I", "--name-only", "-e", "." }
   if rev.type == RevType.LOCAL then
-    cmd[#cmd+1] = "--untracked"
-    cmd[#cmd+1] = "--no-exclude-standard"
+    cmd[#cmd + 1] = "--untracked"
+    cmd[#cmd + 1] = "--no-exclude-standard"
   elseif rev.type == RevType.STAGE then
-    cmd[#cmd+1] = "--cached"
+    cmd[#cmd + 1] = "--cached"
   else
-    cmd[#cmd+1] = rev.commit
+    cmd[#cmd + 1] = rev.commit
   end
 
   utils.vec_push(cmd, "--", path)
@@ -2152,7 +2079,11 @@ GitAdapter.flags = {
   switches = {
     FlagOption("-f", "--follow", "Follow renames (only for single file)"),
     FlagOption("-p", "--first-parent", "Follow only the first parent upon seeing a merge commit"),
-    FlagOption("-s", "--show-pulls", "Show merge commits the first introduced a change to a branch"),
+    FlagOption(
+      "-s",
+      "--show-pulls",
+      "Show merge commits the first introduced a change to a branch"
+    ),
     FlagOption("-R", "--reflog", "Include all reachable objects mentioned by reflogs"),
     FlagOption("-g", "--walk-reflogs", "Walk reflogs instead of the commit ancestry chain"),
     FlagOption("-a", "--all", "Include all refs"),
@@ -2161,7 +2092,11 @@ GitAdapter.flags = {
     FlagOption("-r", "--reverse", "List commits in reverse order"),
     FlagOption("-cp", "--cherry-pick", "Omit commits that introduce the same change as another"),
     FlagOption("-lo", "--left-only", "List only the commits on the left side of a symmetric diff"),
-    FlagOption("-ro", "--right-only", "List only the commits on the right side of a symmetric diff"),
+    FlagOption(
+      "-ro",
+      "--right-only",
+      "List only the commits on the right side of a symmetric diff"
+    ),
   },
   ---@type FlagOption[]
   options = {
@@ -2187,16 +2122,14 @@ GitAdapter.flags = {
         end
       end,
     }),
-    FlagOption("=n", "--max-count=", "Limit the number of commits" ),
+    FlagOption("=n", "--max-count=", "Limit the number of commits"),
     FlagOption("=L", "-L", "Trace line evolution", {
       expect_list = true,
       prompt_label = "(Accepts multiple values)",
       -- prompt_fmt = "${label} ",
       completion = function(_)
         ---@param ctx CmdLineContext
-        return function(ctx)
-          return GitAdapter.line_trace_candidates(ctx.arg_lead)
-        end
+        return function(ctx) return GitAdapter.line_trace_candidates(ctx.arg_lead) end
       end,
     }),
     FlagOption("=d", "--diff-merges=", "Determines how merge commits are treated", {
@@ -2212,22 +2145,22 @@ GitAdapter.flags = {
       },
     }),
     FlagOption("=a", "--author=", "List only commits from a given author", {
-      prompt_label = "(Extended regular expression)"
+      prompt_label = "(Extended regular expression)",
     }),
     FlagOption("=g", "--grep=", "Filter commit messages", {
-      prompt_label = "(Extended regular expression)"
+      prompt_label = "(Extended regular expression)",
     }),
     FlagOption("=G", "-G", "Search changes", {
-      prompt_label = "(Extended regular expression)"
+      prompt_label = "(Extended regular expression)",
     }),
     FlagOption("=S", "-S", "Search occurrences", {
-      prompt_label = "(Extended regular expression)"
+      prompt_label = "(Extended regular expression)",
     }),
     FlagOption("=A", "--after=", "List only commits after a certain date", {
-      prompt_label = "(YYYY-mm-dd, YYYY-mm-dd HH:mm:ss)"
+      prompt_label = "(YYYY-mm-dd, YYYY-mm-dd HH:mm:ss)",
     }),
     FlagOption("=B", "--before=", "List only commits before a certain date", {
-      prompt_label = "(YYYY-mm-dd, YYYY-mm-dd HH:mm:ss)"
+      prompt_label = "(YYYY-mm-dd, YYYY-mm-dd HH:mm:ss)",
     }),
     FlagOption("--", "--", "Limit to files", {
       key = "path_args",
@@ -2241,9 +2174,7 @@ GitAdapter.flags = {
         local view = panel.parent.parent
 
         ---@param ctx CmdLineContext
-        return function(ctx)
-          return view.adapter:path_candidates(ctx.arg_lead)
-        end
+        return function(ctx) return view.adapter:path_candidates(ctx.arg_lead) end
       end,
     }),
   },
@@ -2262,9 +2193,7 @@ end
 function GitAdapter:path_candidates(arg_lead)
   local magic, pattern = GitAdapter.pathspec_split(arg_lead)
 
-  return vim.tbl_map(function(v)
-    return magic .. v
-  end, vim.fn.getcompletion(pattern, "file", 0))
+  return vim.tbl_map(function(v) return magic .. v end, vim.fn.getcompletion(pattern, "file", 0))
 end
 
 ---Get completion candidates for git revisions.
@@ -2309,9 +2238,7 @@ function GitAdapter:rev_candidates(arg_lead, opt)
 
     if range_end then
       local range_lead = arg_lead:sub(1, range_end - 1)
-      ret = vim.tbl_map(function(v)
-        return range_lead .. v
-      end, ret)
+      ret = vim.tbl_map(function(v) return range_lead .. v end, ret)
     end
   end
 
@@ -2330,33 +2257,35 @@ function GitAdapter.line_trace_candidates(arg_lead)
     local lead = arg_lead:sub(1, range_end - 1)
     local path_lead = arg_lead:sub(range_end)
 
-    return vim.tbl_map(function(v)
-      return lead .. v
-    end, vim.fn.getcompletion(path_lead, "file"))
+    return vim.tbl_map(function(v) return lead .. v end, vim.fn.getcompletion(path_lead, "file"))
   end
 end
-
 
 function GitAdapter:init_completion()
   self.comp.open:put({ "u", "untracked-files" }, { "true", "normal", "all", "false", "no" })
   self.comp.open:put({ "cached", "staged" })
   self.comp.open:put({ "imply-local" })
-  self.comp.open:put({ "C" }, function(_, arg_lead)
-    return vim.fn.getcompletion(arg_lead, "dir")
-  end)
-  self.comp.open:put({ "selected-file" }, function (_, arg_lead)
-    return vim.fn.getcompletion(arg_lead, "file")
-  end)
+  self.comp.open:put(
+    { "C" },
+    function(_, arg_lead) return vim.fn.getcompletion(arg_lead, "dir") end
+  )
+  self.comp.open:put(
+    { "selected-file" },
+    function(_, arg_lead) return vim.fn.getcompletion(arg_lead, "file") end
+  )
 
-  self.comp.file_history:put({ "base" }, function(_, arg_lead)
-    return utils.vec_join("LOCAL", self:rev_candidates(arg_lead))
-  end)
-  self.comp.file_history:put({ "range" }, function(_, arg_lead)
-    return self:rev_candidates(arg_lead, { accept_range = true })
-  end)
-  self.comp.file_history:put({ "C" }, function(_, arg_lead)
-    return vim.fn.getcompletion(arg_lead, "dir")
-  end)
+  self.comp.file_history:put(
+    { "base" },
+    function(_, arg_lead) return utils.vec_join("LOCAL", self:rev_candidates(arg_lead)) end
+  )
+  self.comp.file_history:put(
+    { "range" },
+    function(_, arg_lead) return self:rev_candidates(arg_lead, { accept_range = true }) end
+  )
+  self.comp.file_history:put(
+    { "C" },
+    function(_, arg_lead) return vim.fn.getcompletion(arg_lead, "dir") end
+  )
   self.comp.file_history:put({ "--follow" })
   self.comp.file_history:put({ "--first-parent" })
   self.comp.file_history:put({ "--show-pulls" })
@@ -2370,9 +2299,10 @@ function GitAdapter:init_completion()
   self.comp.file_history:put({ "--left-only" })
   self.comp.file_history:put({ "--right-only" })
   self.comp.file_history:put({ "--max-count", "-n" }, {})
-  self.comp.file_history:put({ "-L" }, function (_, arg_lead)
-    return GitAdapter.line_trace_candidates(arg_lead)
-  end)
+  self.comp.file_history:put(
+    { "-L" },
+    function(_, arg_lead) return GitAdapter.line_trace_candidates(arg_lead) end
+  )
   self.comp.file_history:put({ "--diff-merges" }, {
     "off",
     "on",
