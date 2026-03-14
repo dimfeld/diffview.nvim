@@ -52,8 +52,7 @@ GitAdapter.COMMIT_PRETTY_FMT = (
   .. "%n%ar" -- Author date: relative
   .. "%n..%D" -- Ref names
   .. "%n..%gd" -- Reflog selectors
-  .. "%n..%s" -- Subject-- The leading dots here are only used for padding to ensure those lines-- won't ever be completetely empty. This way the lines will be
--- distinguishable from other empty lines outputted by Git.
+  .. "%n..%s" -- Subject-- The leading dots here are only used for padding to ensure those lines-- won't ever be completetely empty. This way the lines will be-- distinguishable from other empty lines outputted by Git.
 
 
 )
@@ -272,14 +271,97 @@ function GitAdapter:get_dir(path)
   return out[1] and vim.trim(out[1])
 end
 
+---@return boolean
+function GitAdapter:is_jj_repo()
+  return self.ctx.toplevel and pl:is_dir(pl:join(self.ctx.toplevel, ".jj")) or false
+end
+
+---@param rev_arg string
+---@return string[] out, integer code, string[] stderr
+function GitAdapter:resolve_jj_rev_arg(rev_arg)
+  local out, code, stderr = utils.job({
+    "jj",
+    "show",
+    rev_arg,
+    "-s",
+    "-T",
+    'commit_id ++ "\\n"',
+  }, {
+    cwd = self.ctx.toplevel,
+    silent = true,
+  })
+
+  if code ~= 0 then return {}, code, stderr or {} end
+
+  local hash = out and out[1] and vim.trim(out[1]):match("^([^%s]+)") or nil
+  if not hash or hash == "" then return {}, 1, stderr or {} end
+
+  return { hash }, 0, stderr or {}
+end
+
+---@param rev_arg string
+---@param opt? table
+---@return string[] out, integer code, string[] stderr
+function GitAdapter:resolve_rev_arg(rev_arg, opt)
+  local out, code, stderr = self:exec_sync(
+    { "rev-parse", "--revs-only", rev_arg },
+    vim.tbl_extend("force", {
+      cwd = self.ctx.toplevel,
+      fail_on_empty = true,
+      retry = 2,
+    }, opt or {})
+  )
+
+  if code == 0 and out[1] and out[1] ~= "" then return out, code, stderr end
+  if self:is_rev_arg_range(rev_arg) then return out, code, stderr end
+  if not self:is_jj_repo() then return out, code, stderr end
+
+  local jj_out, jj_code, jj_stderr = self:resolve_jj_rev_arg(rev_arg)
+  if jj_code == 0 then return jj_out, jj_code, jj_stderr end
+
+  return out, code, stderr
+end
+
+---@param rev_arg string
+---@return string? normalized
+function GitAdapter:normalize_rev_arg(rev_arg)
+  local left, sep, right = rev_arg:match("^(.-)(%.%.%.?)(.-)$")
+  if not sep then return nil end
+
+  local parts = {}
+
+  if left ~= "" then
+    local left_out, left_code = self:resolve_rev_arg(left)
+    if left_code ~= 0 or not left_out[1] or left_out[1] == "" then return nil end
+    parts[#parts + 1] = left_out[1]:gsub("^%^", "")
+  end
+
+  parts[#parts + 1] = sep
+
+  if right ~= "" then
+    local right_out, right_code = self:resolve_rev_arg(right)
+    if right_code ~= 0 or not right_out[1] or right_out[1] == "" then return nil end
+    parts[#parts + 1] = right_out[1]:gsub("^%^", "")
+  end
+
+  return table.concat(parts)
+end
+
 ---Verify that a given git rev is valid.
 ---@param rev_arg string
 ---@return boolean ok, string[] output
 function GitAdapter:verify_rev_arg(rev_arg)
-  local out, code = self:exec_sync({ "rev-parse", "--revs-only", rev_arg }, {
+  local out, code = self:resolve_rev_arg(rev_arg, {
     log_opt = { label = "GitAdapter:verify_rev_arg()" },
-    cwd = self.ctx.toplevel,
   })
+
+  if code ~= 0 or not (out[2] ~= nil or out[1] and out[1] ~= "") then
+    local normalized = self:normalize_rev_arg(rev_arg)
+    if normalized then
+      out, code = self:resolve_rev_arg(normalized)
+    end
+  end
+
   return code == 0 and (out[2] ~= nil or out[1] and out[1] ~= ""), out
 end
 
@@ -1503,19 +1585,20 @@ function GitAdapter:symmetric_diff_revs(rev_arg)
     utils.err(utils.vec_join(fmt("Failed to parse rev '%s'!", rev_arg), "Git output: ", stderr))
   end
 
+  out, code, stderr = self:resolve_rev_arg(r1)
+  if code ~= 0 then return err() end
+  local left_target = out[1]:gsub("^%^", "")
+
+  out, code, stderr = self:resolve_rev_arg(r2)
+  if code ~= 0 then return err() end
+  local right_hash = out[1]:gsub("^%^", "")
+
   out, code, stderr = self:exec_sync(
-    { "merge-base", r1, r2 },
+    { "merge-base", left_target, right_hash },
     { cwd = self.ctx.toplevel, fail_on_empty = true, retry = 2 }
   )
   if code ~= 0 then return err() end
   local left_hash = out[1]:gsub("^%^", "")
-
-  out, code, stderr = self:exec_sync(
-    { "rev-parse", "--revs-only", r2 },
-    { cwd = self.ctx.toplevel, fail_on_empty = true, retry = 2 }
-  )
-  if code ~= 0 then return err() end
-  local right_hash = out[1]:gsub("^%^", "")
 
   return GitRev(RevType.COMMIT, left_hash), GitRev(RevType.COMMIT, right_hash)
 end
@@ -1567,10 +1650,14 @@ function GitAdapter:parse_revs(rev_arg, opt)
       left, right = self:imply_local(left, right, head)
     end
   else
-    local rev_strings, code, stderr = self:exec_sync(
-      { "rev-parse", "--revs-only", rev_arg },
-      { cwd = self.ctx.toplevel, fail_on_empty = true, retry = 2 }
-    )
+    local rev_strings, code, stderr = self:resolve_rev_arg(rev_arg)
+    if code ~= 0 or #rev_strings == 0 then
+      local normalized = self:normalize_rev_arg(rev_arg)
+      if normalized then
+        rev_strings, code, stderr = self:resolve_rev_arg(normalized)
+      end
+    end
+
     if code ~= 0 then
       utils.err(
         utils.vec_join(

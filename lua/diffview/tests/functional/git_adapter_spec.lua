@@ -1,5 +1,6 @@
 local helpers = require("diffview.tests.helpers")
 local eq, neq = helpers.eq, helpers.neq
+local RevType = require("diffview.vcs.rev").RevType
 
 describe("diffview.vcs.adapters.git", function()
   -- Load the actual GitAdapter class to test its methods
@@ -19,17 +20,13 @@ describe("diffview.vcs.adapters.git", function()
         exec_sync = function(self, args, opts)
           -- Handle git rev-parse --abbrev-ref HEAD
           if args[1] == "rev-parse" and args[2] == "--abbrev-ref" and args[3] == "HEAD" then
-            if options.abbrev_ref_fails then
-              return {}, options.abbrev_ref_exit_code or 128
-            end
+            if options.abbrev_ref_fails then return {}, options.abbrev_ref_exit_code or 128 end
             return { options.abbrev_ref_result or "main" }, 0
           end
 
           -- Handle git rev-parse --short HEAD
           if args[1] == "rev-parse" and args[2] == "--short" and args[3] == "HEAD" then
-            if options.short_fails then
-              return {}, options.short_exit_code or 128
-            end
+            if options.short_fails then return {}, options.short_exit_code or 128 end
             return { options.short_result or "abc1234" }, 0
           end
 
@@ -64,7 +61,7 @@ describe("diffview.vcs.adapters.git", function()
 
     it("returns detached-<sha> when in detached HEAD state", function()
       local adapter = create_mock_adapter({
-        abbrev_ref_result = "HEAD",  -- Git returns "HEAD" when detached
+        abbrev_ref_result = "HEAD", -- Git returns "HEAD" when detached
         short_result = "abc1234",
       })
 
@@ -83,7 +80,7 @@ describe("diffview.vcs.adapters.git", function()
 
     it("returns detached-unknown when detached and short rev-parse fails", function()
       local adapter = create_mock_adapter({
-        abbrev_ref_result = "HEAD",  -- Detached state
+        abbrev_ref_result = "HEAD", -- Detached state
         short_fails = true,
       })
 
@@ -127,11 +124,9 @@ describe("diffview.vcs.adapters.git", function()
       })
       -- Override exec_sync for this specific case
       adapter.exec_sync = function(self, args, opts)
-        if args[1] == "rev-parse" and args[2] == "--abbrev-ref" then
-          return {}, 128
-        end
+        if args[1] == "rev-parse" and args[2] == "--abbrev-ref" then return {}, 128 end
         if args[1] == "rev-parse" and args[2] == "--short" then
-          return {}, 0  -- Success but empty array
+          return {}, 0 -- Success but empty array
         end
         return {}, 1
       end
@@ -153,18 +148,22 @@ describe("diffview.vcs.adapters.git", function()
         },
         exec_sync = function(self, args, opts)
           -- Handle git for-each-ref command for local branches
-          if args[1] == "for-each-ref" and args[2] == "--format=%(refname:short)" and args[3] == "refs/heads/" then
-            if options.local_fails then
-              return {}, options.local_exit_code or 128
-            end
+          if
+            args[1] == "for-each-ref"
+            and args[2] == "--format=%(refname:short)"
+            and args[3] == "refs/heads/"
+          then
+            if options.local_fails then return {}, options.local_exit_code or 128 end
             return options.local_output or {}, 0
           end
 
           -- Handle git for-each-ref command for remote branches
-          if args[1] == "for-each-ref" and args[2] == "--format=%(refname:short)" and args[3] == "refs/remotes/" then
-            if options.remote_fails then
-              return {}, options.remote_exit_code or 128
-            end
+          if
+            args[1] == "for-each-ref"
+            and args[2] == "--format=%(refname:short)"
+            and args[3] == "refs/remotes/"
+          then
+            if options.remote_fails then return {}, options.remote_exit_code or 128 end
             return options.remote_output or {}, 0
           end
 
@@ -258,8 +257,8 @@ describe("diffview.vcs.adapters.git", function()
     it("only extracts short forms from remote branches, not local", function()
       -- This is the key test for the bug fix
       local adapter = create_mock_adapter({
-        local_output = { "feature/foo" },  -- Local branch with slash
-        remote_output = { "origin/feature/bar" },  -- Remote branch with slash
+        local_output = { "feature/foo" }, -- Local branch with slash
+        remote_output = { "origin/feature/bar" }, -- Remote branch with slash
       })
 
       local branches = adapter:get_all_branches()
@@ -283,9 +282,7 @@ describe("diffview.vcs.adapters.git", function()
       -- "main" should only appear once even though it's both local and extracted from origin/main
       local main_count = 0
       for _, branch in ipairs(branches) do
-        if branch == "main" then
-          main_count = main_count + 1
-        end
+        if branch == "main" then main_count = main_count + 1 end
       end
       eq(1, main_count)
     end)
@@ -305,9 +302,7 @@ describe("diffview.vcs.adapters.git", function()
       local adapter = create_mock_adapter({})
       -- Override to return nil explicitly
       adapter.exec_sync = function(self, args, opts)
-        if args[1] == "for-each-ref" then
-          return nil, 0
-        end
+        if args[1] == "for-each-ref" then return nil, 0 end
         return {}, 1
       end
 
@@ -357,17 +352,13 @@ describe("diffview.vcs.adapters.git", function()
         exec_sync = function(self, args, opts)
           -- Handle git rev-parse --abbrev-ref HEAD
           if args[1] == "rev-parse" and args[2] == "--abbrev-ref" and args[3] == "HEAD" then
-            if options.abbrev_ref_fails then
-              return {}, options.abbrev_ref_exit_code or 128
-            end
+            if options.abbrev_ref_fails then return {}, options.abbrev_ref_exit_code or 128 end
             return { options.abbrev_ref_result or "main" }, 0
           end
 
           -- Handle git rev-parse --short HEAD
           if args[1] == "rev-parse" and args[2] == "--short" and args[3] == "HEAD" then
-            if options.short_fails then
-              return {}, options.short_exit_code or 128
-            end
+            if options.short_fails then return {}, options.short_exit_code or 128 end
             return { options.short_result or "abc1234" }, 0
           end
 
@@ -381,20 +372,16 @@ describe("diffview.vcs.adapters.git", function()
 
     it("uses JJ command when .jj directory exists", function()
       -- Mock is_dir to return true for .jj
-      utils.path.is_dir = function(self, path)
-        return path:match("%.jj$") ~= nil
-      end
+      utils.path.is_dir = function(self, path) return path:match("%.jj$") ~= nil end
 
       -- Mock utils.job to return JJ output
       utils.job = function(cmd, opts)
-        if cmd[1] == "jj" then
-          return { "feature-branch" }, 0, {}
-        end
+        if cmd[1] == "jj" then return { "feature-branch" }, 0, {} end
         return original_job(cmd, opts)
       end
 
       local adapter = create_jj_mock_adapter({
-        abbrev_ref_result = "git-branch",  -- This should NOT be used
+        abbrev_ref_result = "git-branch", -- This should NOT be used
       })
 
       local branch = adapter:get_current_branch()
@@ -402,13 +389,11 @@ describe("diffview.vcs.adapters.git", function()
     end)
 
     it("removes asterisks from JJ bookmark output", function()
-      utils.path.is_dir = function(self, path)
-        return path:match("%.jj$") ~= nil
-      end
+      utils.path.is_dir = function(self, path) return path:match("%.jj$") ~= nil end
 
       utils.job = function(cmd, opts)
         if cmd[1] == "jj" then
-          return { "my-bookmark*" }, 0, {}  -- JJ marks current with asterisk
+          return { "my-bookmark*" }, 0, {} -- JJ marks current with asterisk
         end
         return original_job(cmd, opts)
       end
@@ -420,14 +405,10 @@ describe("diffview.vcs.adapters.git", function()
     end)
 
     it("handles whitespace in JJ output", function()
-      utils.path.is_dir = function(self, path)
-        return path:match("%.jj$") ~= nil
-      end
+      utils.path.is_dir = function(self, path) return path:match("%.jj$") ~= nil end
 
       utils.job = function(cmd, opts)
-        if cmd[1] == "jj" then
-          return { "  spaced-branch*  \n" }, 0, {}
-        end
+        if cmd[1] == "jj" then return { "  spaced-branch*  \n" }, 0, {} end
         return original_job(cmd, opts)
       end
 
@@ -438,13 +419,11 @@ describe("diffview.vcs.adapters.git", function()
     end)
 
     it("falls back to Git when JJ command fails", function()
-      utils.path.is_dir = function(self, path)
-        return path:match("%.jj$") ~= nil
-      end
+      utils.path.is_dir = function(self, path) return path:match("%.jj$") ~= nil end
 
       utils.job = function(cmd, opts)
         if cmd[1] == "jj" then
-          return {}, 1, { "jj: command not found" }  -- JJ not installed
+          return {}, 1, { "jj: command not found" } -- JJ not installed
         end
         return original_job(cmd, opts)
       end
@@ -458,13 +437,11 @@ describe("diffview.vcs.adapters.git", function()
     end)
 
     it("falls back to Git when JJ returns empty output", function()
-      utils.path.is_dir = function(self, path)
-        return path:match("%.jj$") ~= nil
-      end
+      utils.path.is_dir = function(self, path) return path:match("%.jj$") ~= nil end
 
       utils.job = function(cmd, opts)
         if cmd[1] == "jj" then
-          return {}, 0, {}  -- Success but empty (no bookmarks)
+          return {}, 0, {} -- Success but empty (no bookmarks)
         end
         return original_job(cmd, opts)
       end
@@ -478,13 +455,11 @@ describe("diffview.vcs.adapters.git", function()
     end)
 
     it("falls back to Git when JJ output is only whitespace/asterisks", function()
-      utils.path.is_dir = function(self, path)
-        return path:match("%.jj$") ~= nil
-      end
+      utils.path.is_dir = function(self, path) return path:match("%.jj$") ~= nil end
 
       utils.job = function(cmd, opts)
         if cmd[1] == "jj" then
-          return { "  *  " }, 0, {}  -- Only whitespace and asterisks
+          return { "  *  " }, 0, {} -- Only whitespace and asterisks
         end
         return original_job(cmd, opts)
       end
@@ -499,15 +474,13 @@ describe("diffview.vcs.adapters.git", function()
 
     it("uses Git behavior when .jj directory does not exist", function()
       utils.path.is_dir = function(self, path)
-        return false  -- No .jj directory
+        return false -- No .jj directory
       end
 
       -- JJ should NOT be called
       local jj_called = false
       utils.job = function(cmd, opts)
-        if cmd[1] == "jj" then
-          jj_called = true
-        end
+        if cmd[1] == "jj" then jj_called = true end
         return original_job(cmd, opts)
       end
 
@@ -518,6 +491,152 @@ describe("diffview.vcs.adapters.git", function()
       local branch = adapter:get_current_branch()
       eq("regular-git-branch", branch)
       eq(false, jj_called)
+    end)
+  end)
+
+  describe("JJ revision parsing", function()
+    local utils = require("diffview.utils")
+    local original_job
+    local original_is_dir
+
+    before_each(function()
+      original_job = utils.job
+      original_is_dir = utils.path.is_dir
+    end)
+
+    after_each(function()
+      utils.job = original_job
+      utils.path.is_dir = original_is_dir
+    end)
+
+    local function create_rev_mock_adapter(options)
+      options = options or {}
+
+      local mock = {
+        ctx = {
+          toplevel = options.toplevel or "/mock/repo",
+        },
+        exec_sync = function(self, args, opts)
+          if args[1] == "rev-parse" and args[2] == "HEAD" and args[3] == "--" then
+            return { options.head_result or "head-hash" }, 0
+          end
+
+          if args[1] == "rev-parse" and args[2] == "--revs-only" then
+            local result = options.rev_parse_results and options.rev_parse_results[args[3]]
+            if result then return result, 0, {} end
+            return {}, 128, { "bad revision" }
+          end
+
+          if args[1] == "merge-base" then
+            return { options.merge_base_result or "merge-base-hash" }, 0, {}
+          end
+
+          return {}, 1, {}
+        end,
+      }
+
+      setmetatable(mock, { __index = GitAdapter })
+      return mock
+    end
+
+    it("verifies single JJ revisions when git rev-parse fails", function()
+      utils.path.is_dir = function(self, path) return path:match("%.jj$") ~= nil end
+
+      utils.job = function(cmd, opts)
+        if cmd[1] == "jj" and cmd[2] == "show" and cmd[3] == "bookmark-1" then
+          return { "jj-commit-hash" }, 0, {}
+        end
+        return original_job(cmd, opts)
+      end
+
+      local adapter = create_rev_mock_adapter()
+      local ok, out = adapter:verify_rev_arg("bookmark-1")
+
+      eq(true, ok)
+      eq("jj-commit-hash", out[1])
+    end)
+
+    it("parses single JJ revisions into commit revs", function()
+      utils.path.is_dir = function(self, path) return path:match("%.jj$") ~= nil end
+
+      utils.job = function(cmd, opts)
+        if cmd[1] == "jj" and cmd[2] == "show" and cmd[3] == "bookmark-2" then
+          return { "jj-single-hash" }, 0, {}
+        end
+        return original_job(cmd, opts)
+      end
+
+      local adapter = create_rev_mock_adapter()
+      local left, right = adapter:parse_revs("bookmark-2", {})
+
+      eq("jj-single-hash", left.commit)
+      eq(RevType.LOCAL, right.type)
+    end)
+
+    it("parses rev ranges with JJ revisions on either endpoint", function()
+      utils.path.is_dir = function(self, path) return path:match("%.jj$") ~= nil end
+
+      utils.job = function(cmd, opts)
+        if cmd[1] == "jj" and cmd[2] == "show" and cmd[3] == "bookmark-3" then
+          return { "jj-range-hash" }, 0, {}
+        end
+        return original_job(cmd, opts)
+      end
+
+      local adapter = create_rev_mock_adapter({
+        rev_parse_results = {
+          ["git-base"] = { "git-base-hash" },
+          ["git-base-hash..jj-range-hash"] = { "jj-range-hash", "^git-base-hash" },
+        },
+      })
+
+      local left, right = adapter:parse_revs("git-base..bookmark-3", {})
+
+      eq("git-base-hash", left.commit)
+      eq("jj-range-hash", right.commit)
+    end)
+
+    it("resolves JJ revisions before computing symmetric diffs", function()
+      utils.path.is_dir = function(self, path) return path:match("%.jj$") ~= nil end
+
+      utils.job = function(cmd, opts)
+        if cmd[1] == "jj" and cmd[2] == "show" and cmd[3] == "bookmark-left" then
+          return { "jj-left-hash" }, 0, {}
+        end
+        if cmd[1] == "jj" and cmd[2] == "show" and cmd[3] == "bookmark-right" then
+          return { "jj-right-hash" }, 0, {}
+        end
+        return original_job(cmd, opts)
+      end
+
+      local merge_base_args
+      local adapter = create_rev_mock_adapter({
+        merge_base_result = "merge-base-hash",
+      })
+
+      adapter.exec_sync = function(self, args, opts)
+        if args[1] == "rev-parse" and args[2] == "HEAD" and args[3] == "--" then
+          return { "head-hash" }, 0
+        end
+
+        if args[1] == "rev-parse" and args[2] == "--revs-only" then
+          return {}, 128, { "bad revision" }
+        end
+
+        if args[1] == "merge-base" then
+          merge_base_args = { args[2], args[3] }
+          return { "merge-base-hash" }, 0, {}
+        end
+
+        return {}, 1, {}
+      end
+
+      local left, right = adapter:parse_revs("bookmark-left...bookmark-right", {})
+
+      eq("jj-left-hash", merge_base_args[1])
+      eq("jj-right-hash", merge_base_args[2])
+      eq("merge-base-hash", left.commit)
+      eq("jj-right-hash", right.commit)
     end)
   end)
 
@@ -535,9 +654,7 @@ describe("diffview.vcs.adapters.git", function()
         exec_sync = function(self, args, opts)
           -- Handle git ls-tree command
           if args[1] == "ls-tree" then
-            if options.ls_tree_fails then
-              return {}, options.ls_tree_exit_code or 128
-            end
+            if options.ls_tree_fails then return {}, options.ls_tree_exit_code or 128 end
             -- Return mock ls-tree output
             -- Format: "<mode> <type> <hash>\t<path>\0"
             return options.ls_tree_output or {}, 0
@@ -607,7 +724,7 @@ describe("diffview.vcs.adapters.git", function()
 
     it("initializes all paths to nil before processing", function()
       local adapter = create_mock_adapter({
-        ls_tree_output = {},  -- No output - all paths fail
+        ls_tree_output = {}, -- No output - all paths fail
       })
 
       local paths = { "a.lua", "b.lua", "c.lua" }
