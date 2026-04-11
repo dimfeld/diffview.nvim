@@ -54,7 +54,6 @@ GitAdapter.COMMIT_PRETTY_FMT = (
   .. "%n..%gd" -- Reflog selectors
   .. "%n..%s" -- Subject-- The leading dots here are only used for padding to ensure those lines-- won't ever be completetely empty. This way the lines will be-- distinguishable from other empty lines outputted by Git.
 
-
 )
 
 ---@return string, string
@@ -363,6 +362,24 @@ function GitAdapter:verify_rev_arg(rev_arg)
   end
 
   return code == 0 and (out[2] ~= nil or out[1] and out[1] ~= ""), out
+end
+
+---@param rev_arg string
+---@return string? range_arg
+function GitAdapter:show_single_commit_rev_arg(rev_arg)
+  if self:is_rev_arg_range(rev_arg) then
+    utils.err("DiffviewShow expects a single revision, not a range: " .. utils.str_quote(rev_arg))
+    return
+  end
+
+  local ok, out = self:verify_rev_arg(rev_arg)
+
+  if not ok or not out[1] or out[1] == "" then
+    utils.err("Bad revision: " .. utils.str_quote(rev_arg))
+    return
+  end
+
+  return out[1]:gsub("^%^", "") .. "^!"
 end
 
 ---@return vcs.MergeContext?

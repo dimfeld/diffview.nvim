@@ -1,6 +1,4 @@
-if not require("diffview.bootstrap") then
-  return
-end
+if not require("diffview.bootstrap") then return end
 
 local hl = require("diffview.hl")
 local lazy = require("diffview.lazy")
@@ -18,9 +16,7 @@ local pl = lazy.access(utils, "path") ---@type PathLib
 
 local M = {}
 
-function M.setup(user_config)
-  config.setup(user_config or {})
-end
+function M.setup(user_config) config.setup(user_config or {}) end
 
 function M.init()
   -- Fix the strange behavior that "<afile>" expands non-files
@@ -47,78 +43,83 @@ function M.init()
   au("TabEnter", {
     group = M.augroup,
     pattern = "*",
-    callback = function(_)
-      M.emit("tab_enter")
-    end,
+    callback = function(_) M.emit("tab_enter") end,
   })
   au("TabLeave", {
     group = M.augroup,
     pattern = "*",
-    callback = function(_)
-      M.emit("tab_leave")
-    end,
+    callback = function(_) M.emit("tab_leave") end,
   })
   au("TabClosed", {
     group = M.augroup,
     pattern = "*",
-    callback = function(state)
-      M.close(get_tabnr(state))
-    end,
+    callback = function(state) M.close(get_tabnr(state)) end,
   })
   au("BufWritePost", {
     group = M.augroup,
     pattern = "*",
-    callback = function(_)
-      M.emit("buf_write_post")
-    end,
+    callback = function(_) M.emit("buf_write_post") end,
   })
   au("WinClosed", {
     group = M.augroup,
     pattern = "*",
-    callback = function(state)
-      M.emit("win_closed", get_tabnr(state))
-    end,
+    callback = function(state) M.emit("win_closed", get_tabnr(state)) end,
   })
   au("ColorScheme", {
     group = M.augroup,
     pattern = "*",
-    callback = function(_)
-      M.update_colors()
-    end,
+    callback = function(_) M.update_colors() end,
   })
   au("User", {
     group = M.augroup,
     pattern = "FugitiveChanged",
-    callback = function(_)
-      M.emit("refresh_files")
-    end,
+    callback = function(_) M.emit("refresh_files") end,
   })
 
   -- Set up user autocommand emitters
-  DiffviewGlobal.emitter:on("view_opened", function(_)
-    api.nvim_exec_autocmds("User", { pattern = "DiffviewViewOpened", modeline = false })
-  end)
-  DiffviewGlobal.emitter:on("view_closed", function(_)
-    api.nvim_exec_autocmds("User", { pattern = "DiffviewViewClosed", modeline = false })
-  end)
-  DiffviewGlobal.emitter:on("view_enter", function(_)
-    api.nvim_exec_autocmds("User", { pattern = "DiffviewViewEnter", modeline = false })
-  end)
-  DiffviewGlobal.emitter:on("view_leave", function(_)
-    api.nvim_exec_autocmds("User", { pattern = "DiffviewViewLeave", modeline = false })
-  end)
-  DiffviewGlobal.emitter:on("view_post_layout", function(_)
-    api.nvim_exec_autocmds("User", { pattern = "DiffviewViewPostLayout", modeline = false })
-  end)
-  DiffviewGlobal.emitter:on("diff_buf_read", function(_)
-    api.nvim_exec_autocmds("User", { pattern = "DiffviewDiffBufRead", modeline = false })
-  end)
-  DiffviewGlobal.emitter:on("diff_buf_win_enter", function(_)
-    api.nvim_exec_autocmds("User", { pattern = "DiffviewDiffBufWinEnter", modeline = false })
-  end)
-  DiffviewGlobal.emitter:on("review_cleanup_completed", function(_)
-    api.nvim_exec_autocmds("User", { pattern = "DiffviewReviewCleanupCompleted", modeline = false })
-  end)
+  DiffviewGlobal.emitter:on(
+    "view_opened",
+    function(_) api.nvim_exec_autocmds("User", { pattern = "DiffviewViewOpened", modeline = false }) end
+  )
+  DiffviewGlobal.emitter:on(
+    "view_closed",
+    function(_) api.nvim_exec_autocmds("User", { pattern = "DiffviewViewClosed", modeline = false }) end
+  )
+  DiffviewGlobal.emitter:on(
+    "view_enter",
+    function(_) api.nvim_exec_autocmds("User", { pattern = "DiffviewViewEnter", modeline = false }) end
+  )
+  DiffviewGlobal.emitter:on(
+    "view_leave",
+    function(_) api.nvim_exec_autocmds("User", { pattern = "DiffviewViewLeave", modeline = false }) end
+  )
+  DiffviewGlobal.emitter:on(
+    "view_post_layout",
+    function(_)
+      api.nvim_exec_autocmds("User", { pattern = "DiffviewViewPostLayout", modeline = false })
+    end
+  )
+  DiffviewGlobal.emitter:on(
+    "diff_buf_read",
+    function(_)
+      api.nvim_exec_autocmds("User", { pattern = "DiffviewDiffBufRead", modeline = false })
+    end
+  )
+  DiffviewGlobal.emitter:on(
+    "diff_buf_win_enter",
+    function(_)
+      api.nvim_exec_autocmds("User", { pattern = "DiffviewDiffBufWinEnter", modeline = false })
+    end
+  )
+  DiffviewGlobal.emitter:on(
+    "review_cleanup_completed",
+    function(_)
+      api.nvim_exec_autocmds(
+        "User",
+        { pattern = "DiffviewReviewCleanupCompleted", modeline = false }
+      )
+    end
+  )
 
   -- Set up completion wrapper used by `vim.ui.input()`
   vim.cmd([[
@@ -132,34 +133,32 @@ end
 ---@param args string[]
 function M.open(args)
   local view = lib.diffview_open(args)
-  if view then
-    view:open()
-  end
+  if view then view:open() end
+end
+
+---@param args string[]
+function M.show(args)
+  local view = lib.diffview_show(args)
+  if view then view:open() end
 end
 
 ---@param json_path string
 ---@param rev_args? string[]
 function M.open_json(json_path, rev_args)
   local view = lib.json_view_open(json_path, rev_args)
-  if view then
-    view:open()
-  end
+  if view then view:open() end
 end
 
 ---@param range? { [1]: integer, [2]: integer }
 ---@param args string[]
 function M.file_history(range, args)
   local view = lib.file_history(range, args)
-  if view then
-    view:open()
-  end
+  if view then view:open() end
 end
 
 function M.close(tabpage)
   if tabpage then
-    vim.schedule(function()
-      lib.dispose_stray_views()
-    end)
+    vim.schedule(function() lib.dispose_stray_views() end)
     return
   end
 
@@ -182,21 +181,15 @@ end
 ---Create a temporary adapter to get relevant completions
 ---@return VCSAdapter?
 function M.get_adapter()
-    local cfile = pl:vim_expand("%")
-    local top_indicators = utils.vec_join(
-      vim.bo.buftype == ""
-          and pl:absolute(cfile)
-          or nil,
-      pl:realpath(".")
-    )
+  local cfile = pl:vim_expand("%")
+  local top_indicators =
+    utils.vec_join(vim.bo.buftype == "" and pl:absolute(cfile) or nil, pl:realpath("."))
 
-    local err, adapter = vcs.get_adapter({ top_indicators = top_indicators })
+  local err, adapter = vcs.get_adapter({ top_indicators = top_indicators })
 
-    if err then
-      logger:warn("[completion] Failed to create adapter: " .. err)
-    end
+  if err then logger:warn("[completion] Failed to create adapter: " .. err) end
 
-    return adapter
+  return adapter
 end
 
 M.completers = {
@@ -223,14 +216,55 @@ M.completers = {
     elseif adapter then
       if not has_rev_arg and ctx.arg_lead:sub(1, 1) ~= "-" then
         utils.vec_push(candidates, unpack(adapter.comp.open:get_all_names()))
-        utils.vec_push(candidates, unpack(adapter:rev_candidates(ctx.arg_lead, {
-          accept_range = true,
-        })))
+        utils.vec_push(
+          candidates,
+          unpack(adapter:rev_candidates(ctx.arg_lead, {
+            accept_range = true,
+          }))
+        )
       else
-        utils.vec_push(candidates, unpack(
-          adapter.comp.open:get_completion(ctx.arg_lead)
-          or adapter.comp.open:get_all_names()
-        ))
+        utils.vec_push(
+          candidates,
+          unpack(
+            adapter.comp.open:get_completion(ctx.arg_lead) or adapter.comp.open:get_all_names()
+          )
+        )
+      end
+    end
+
+    return candidates
+  end,
+  ---@param ctx CmdLineContext
+  DiffviewShow = function(ctx)
+    local has_rev_arg = false
+    local adapter = M.get_adapter()
+
+    for i = 2, math.min(#ctx.args, ctx.divideridx) do
+      if ctx.args[i]:sub(1, 1) ~= "-" and i ~= ctx.argidx then
+        has_rev_arg = true
+        break
+      end
+    end
+
+    local candidates = {}
+
+    if ctx.argidx > ctx.divideridx then
+      if adapter then
+        utils.vec_push(candidates, unpack(adapter:path_candidates(ctx.arg_lead)))
+      else
+        utils.vec_push(candidates, unpack(vim.fn.getcompletion(ctx.arg_lead, "file", 0)))
+      end
+    elseif adapter then
+      if not has_rev_arg and ctx.arg_lead:sub(1, 1) ~= "-" then
+        utils.vec_push(candidates, unpack(adapter.comp.open:get_all_names()))
+        utils.vec_push(candidates, unpack(adapter:rev_candidates(ctx.arg_lead)))
+      else
+        utils.vec_push(
+          candidates,
+          unpack(
+            adapter.comp.open:get_completion(ctx.arg_lead) or adapter.comp.open:get_all_names()
+          )
+        )
       end
     end
 
@@ -238,9 +272,7 @@ M.completers = {
   end,
   ---@param ctx CmdLineContext
   DiffviewOpenJson = function(ctx)
-    if ctx.argidx == 2 then
-      return vim.fn.getcompletion(ctx.arg_lead, "file", 0)
-    end
+    if ctx.argidx == 2 then return vim.fn.getcompletion(ctx.arg_lead, "file", 0) end
     local has_rev_arg = false
     local adapter = M.get_adapter()
 
@@ -262,14 +294,19 @@ M.completers = {
     elseif adapter then
       if not has_rev_arg and ctx.arg_lead:sub(1, 1) ~= "-" then
         utils.vec_push(candidates, unpack(adapter.comp.open:get_all_names()))
-        utils.vec_push(candidates, unpack(adapter:rev_candidates(ctx.arg_lead, {
-          accept_range = true,
-        })))
+        utils.vec_push(
+          candidates,
+          unpack(adapter:rev_candidates(ctx.arg_lead, {
+            accept_range = true,
+          }))
+        )
       else
-        utils.vec_push(candidates, unpack(
-          adapter.comp.open:get_completion(ctx.arg_lead)
-          or adapter.comp.open:get_all_names()
-        ))
+        utils.vec_push(
+          candidates,
+          unpack(
+            adapter.comp.open:get_completion(ctx.arg_lead) or adapter.comp.open:get_all_names()
+          )
+        )
       end
     end
 
@@ -281,10 +318,13 @@ M.completers = {
     local candidates = {}
 
     if adapter then
-      utils.vec_push(candidates, unpack(
-        adapter.comp.file_history:get_completion(ctx.arg_lead)
-        or adapter.comp.file_history:get_all_names()
-      ))
+      utils.vec_push(
+        candidates,
+        unpack(
+          adapter.comp.file_history:get_completion(ctx.arg_lead)
+            or adapter.comp.file_history:get_all_names()
+        )
+      )
       utils.vec_push(candidates, unpack(adapter:path_candidates(ctx.arg_lead)))
     else
       utils.vec_push(candidates, unpack(vim.fn.getcompletion(ctx.arg_lead, "file", 0)))
@@ -318,13 +358,9 @@ local function _emit(no_recursion, event_name, ...)
   end
 end
 
-function M.emit(event_name, ...)
-  _emit(false, event_name, ...)
-end
+function M.emit(event_name, ...) _emit(false, event_name, ...) end
 
-function M.nore_emit(event_name, ...)
-  _emit(true, event_name, ...)
-end
+function M.nore_emit(event_name, ...) _emit(true, event_name, ...) end
 
 -- Expose review API
 M.review = review

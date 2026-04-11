@@ -573,6 +573,34 @@ describe("diffview.vcs.adapters.git", function()
       eq(RevType.LOCAL, right.type)
     end)
 
+    it("converts a git revision into a single-commit diff range", function()
+      local adapter = create_rev_mock_adapter({
+        rev_parse_results = {
+          ["git-commit"] = { "git-commit-hash" },
+        },
+      })
+
+      local range_arg = adapter:show_single_commit_rev_arg("git-commit")
+
+      eq("git-commit-hash^!", range_arg)
+    end)
+
+    it("converts a JJ revision into a single-commit diff range", function()
+      utils.path.is_dir = function(self, path) return path:match("%.jj$") ~= nil end
+
+      utils.job = function(cmd, opts)
+        if cmd[1] == "jj" and cmd[2] == "show" and cmd[3] == "bookmark-show" then
+          return { "jj-show-hash" }, 0, {}
+        end
+        return original_job(cmd, opts)
+      end
+
+      local adapter = create_rev_mock_adapter()
+      local range_arg = adapter:show_single_commit_rev_arg("bookmark-show")
+
+      eq("jj-show-hash^!", range_arg)
+    end)
+
     it("parses rev ranges with JJ revisions on either endpoint", function()
       utils.path.is_dir = function(self, path) return path:match("%.jj$") ~= nil end
 

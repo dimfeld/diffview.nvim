@@ -1,7 +1,8 @@
 local lazy = require("diffview.lazy")
 
 local DiffView = lazy.access("diffview.scene.views.diff.diff_view", "DiffView") ---@type DiffView|LazyModule
-local FileHistoryView = lazy.access("diffview.scene.views.file_history.file_history_view", "FileHistoryView") ---@type FileHistoryView|LazyModule
+local FileHistoryView =
+  lazy.access("diffview.scene.views.file_history.file_history_view", "FileHistoryView") ---@type FileHistoryView|LazyModule
 local StandardView = lazy.access("diffview.scene.views.standard.standard_view", "StandardView") ---@type StandardView|LazyModule
 local GroupedFileDict = lazy.access("diffview.grouped_file_dict", "GroupedFileDict") ---@type GroupedFileDict|LazyModule
 local GitAdapter = lazy.access("diffview.vcs.adapters.git", "GitAdapter") ---@type GitAdapter|LazyModule
@@ -29,10 +30,13 @@ function M.diffview_open(args)
   local argo = arg_parser.parse(utils.flatten({ default_args, args }))
   local rev_arg = argo.args[1]
 
-  logger:info("[command call] :DiffviewOpen " .. table.concat(utils.flatten({
-    default_args,
-    args,
-  }), " "))
+  logger:info("[command call] :DiffviewOpen " .. table.concat(
+    utils.flatten({
+      default_args,
+      args,
+    }),
+    " "
+  ))
 
   local err, adapter = vcs.get_adapter({
     cmd_ctx = {
@@ -50,9 +54,7 @@ function M.diffview_open(args)
 
   local opts = adapter:diffview_options(argo)
 
-  if opts == nil then
-    return
-  end
+  if opts == nil then return end
 
   local v = DiffView({
     adapter = adapter,
@@ -63,9 +65,73 @@ function M.diffview_open(args)
     options = opts.options,
   })
 
-  if not v:is_valid() then
+  if not v:is_valid() then return end
+
+  table.insert(M.views, v)
+  logger:debug("DiffView instantiation successful!")
+
+  return v
+end
+
+function M.diffview_show(args)
+  local default_args = config.get_config().default_args.DiffviewOpen
+  local argo = arg_parser.parse(utils.flatten({ default_args, args }))
+  local rev_arg = argo.args[1]
+
+  logger:info("[command call] :DiffviewShow " .. table.concat(
+    utils.flatten({
+      default_args,
+      args,
+    }),
+    " "
+  ))
+
+  if not rev_arg then
+    utils.err("Usage: DiffviewShow {rev} [options] [ -- {paths...}]")
+    return
+  elseif argo.args[2] then
+    utils.err("DiffviewShow accepts exactly one revision.")
     return
   end
+
+  local err, adapter = vcs.get_adapter({
+    cmd_ctx = {
+      path_args = argo.post_args,
+      cpath = argo:get_flag("C", { no_empty = true, expand = true }),
+    },
+  })
+
+  if err then
+    utils.err(err)
+    return
+  end
+
+  ---@cast adapter -?
+
+  if type(adapter.show_single_commit_rev_arg) ~= "function" then
+    utils.err(("The active %s adapter does not support :DiffviewShow."):format(adapter:bin()))
+    return
+  end
+
+  local show_rev_arg = adapter:show_single_commit_rev_arg(rev_arg)
+  if not show_rev_arg then return end
+
+  argo.args[1] = show_rev_arg
+
+  local opts = adapter:diffview_options(argo)
+
+  if opts == nil then return end
+
+  local v = DiffView({
+    adapter = adapter,
+    rev_arg = rev_arg,
+    path_args = adapter.ctx.path_args,
+    left = opts.left,
+    right = opts.right,
+    options = opts.options,
+  })
+
+  if not v:is_valid() then return end
 
   table.insert(M.views, v)
   logger:debug("DiffView instantiation successful!")
@@ -108,9 +174,7 @@ local function build_grouped_files(adapter, left, right, dv_opt, data)
     end
   end
 
-  if #paths == 0 then
-    return GroupedFileDict(data.title), nil, {}, false
-  end
+  if #paths == 0 then return GroupedFileDict(data.title), nil, {}, false end
 
   local err, file_dict
   local layout_opt = {
@@ -118,26 +182,26 @@ local function build_grouped_files(adapter, left, right, dv_opt, data)
     merge_layout = DiffView.get_default_merge_layout(),
   }
   async.sync_void(function()
-    err, file_dict = await(vcs_utils.diff_file_list(adapter, left, right, paths, dv_opt, layout_opt))
+    err, file_dict =
+      await(vcs_utils.diff_file_list(adapter, left, right, paths, dv_opt, layout_opt))
   end)()
 
-  if err then
-    return nil, err
-  end
+  if err then return nil, err end
 
   file_dict = file_dict or { working = {}, staged = {}, conflicting = {} }
 
   local entry_by_path = {}
   local entry_priority = {}
   local function add_entry(entry, priority)
-    if not entry then
-      return
-    end
+    if not entry then return end
     if entry_priority[entry.path] == nil or priority > entry_priority[entry.path] then
       entry_by_path[entry.path] = entry
       entry_priority[entry.path] = priority
     end
-    if entry.oldpath and (entry_priority[entry.oldpath] == nil or priority > entry_priority[entry.oldpath]) then
+    if
+      entry.oldpath
+      and (entry_priority[entry.oldpath] == nil or priority > entry_priority[entry.oldpath])
+    then
       entry_by_path[entry.oldpath] = entry
       entry_priority[entry.oldpath] = priority
     end
@@ -157,11 +221,10 @@ local function build_grouped_files(adapter, left, right, dv_opt, data)
 
   local exists_cache = {}
   local function path_exists(path)
-    if exists_cache[path] ~= nil then
-      return exists_cache[path]
-    end
+    if exists_cache[path] ~= nil then return exists_cache[path] end
 
-    local exists = file_exists_in_rev(adapter, path, left) or file_exists_in_rev(adapter, path, right)
+    local exists = file_exists_in_rev(adapter, path, left)
+      or file_exists_in_rev(adapter, path, right)
     exists_cache[path] = exists
     return exists
   end
@@ -181,9 +244,7 @@ local function build_grouped_files(adapter, left, right, dv_opt, data)
         has_any = true
         if entry.kind == "conflicting" then
           merge_ctx = merge_ctx or adapter:get_merge_context()
-          if merge_ctx then
-            entry:update_merge_context(merge_ctx)
-          end
+          if merge_ctx then entry:update_merge_context(merge_ctx) end
         end
       elseif not path_exists(file_spec.path) and not missing_map[file_spec.path] then
         missing_map[file_spec.path] = true
@@ -191,9 +252,7 @@ local function build_grouped_files(adapter, left, right, dv_opt, data)
       end
     end
 
-    if #group_entries > 0 then
-      grouped_files:add_group(group.name, group_entries)
-    end
+    if #group_entries > 0 then grouped_files:add_group(group.name, group_entries) end
   end
 
   return grouped_files, nil, missing, has_any
@@ -205,11 +264,14 @@ function M.json_view_open(json_path, args)
   local argo = arg_parser.parse(utils.flatten({ default_args, args }))
   local rev_arg = argo.args[1]
 
-  logger:info("[command call] :DiffviewOpenJson " .. table.concat(utils.flatten({
-    json_path,
-    default_args,
-    args,
-  }), " "))
+  logger:info("[command call] :DiffviewOpenJson " .. table.concat(
+    utils.flatten({
+      json_path,
+      default_args,
+      args,
+    }),
+    " "
+  ))
 
   local data, json_err = json_loader.load_json(json_path)
   if json_err then
@@ -232,17 +294,10 @@ function M.json_view_open(json_path, args)
   ---@cast adapter -?
 
   local opts = adapter:diffview_options(argo)
-  if opts == nil then
-    return
-  end
+  if opts == nil then return end
 
-  local grouped_files, build_err, missing, has_any = build_grouped_files(
-    adapter,
-    opts.left,
-    opts.right,
-    opts.options,
-    data
-  )
+  local grouped_files, build_err, missing, has_any =
+    build_grouped_files(adapter, opts.left, opts.right, opts.options, data)
 
   if build_err then
     utils.err(build_err)
@@ -268,9 +323,7 @@ function M.json_view_open(json_path, args)
     files = grouped_files,
   })
 
-  if not v:is_valid() then
-    return
-  end
+  if not v:is_valid() then return end
 
   table.insert(M.views, v)
   logger:debug("DiffView instantiation successful!")
@@ -284,10 +337,13 @@ function M.file_history(range, args)
   local default_args = config.get_config().default_args.DiffviewFileHistory
   local argo = arg_parser.parse(utils.flatten({ default_args, args }))
 
-  logger:info("[command call] :DiffviewFileHistory " .. table.concat(utils.flatten({
-    default_args,
-    args,
-  }), " "))
+  logger:info("[command call] :DiffviewFileHistory " .. table.concat(
+    utils.flatten({
+      default_args,
+      args,
+    }),
+    " "
+  ))
 
   local err, adapter = vcs.get_adapter({
     cmd_ctx = {
@@ -305,18 +361,14 @@ function M.file_history(range, args)
 
   local log_options = adapter:file_history_options(range, adapter.ctx.path_args, argo)
 
-  if log_options == nil then
-    return
-  end
+  if log_options == nil then return end
 
   local v = FileHistoryView({
     adapter = adapter,
     log_options = log_options,
   })
 
-  if not v:is_valid() then
-    return
-  end
+  if not v:is_valid() then return end
 
   table.insert(M.views, v)
   logger:debug("FileHistoryView instantiation successful!")
@@ -325,9 +377,7 @@ function M.file_history(range, args)
 end
 
 ---@param view View
-function M.add_view(view)
-  table.insert(M.views, view)
-end
+function M.add_view(view) table.insert(M.views, view) end
 
 ---@param view View
 function M.dispose_view(view)
@@ -350,9 +400,7 @@ function M.dispose_stray_views()
   for _, view in ipairs(M.views) do
     if not tabpage_map[view.tabpage] then
       -- Need to schedule here because the tabnr's don't update fast enough.
-      vim.schedule(function()
-        view:close()
-      end)
+      vim.schedule(function() view:close() end)
       table.insert(dispose, view)
     end
   end
@@ -367,9 +415,7 @@ end
 function M.get_current_view()
   local tabpage = api.nvim_get_current_tabpage()
   for _, view in ipairs(M.views) do
-    if view.tabpage == tabpage then
-      return view
-    end
+    if view.tabpage == tabpage then return view end
   end
 
   return nil
@@ -377,9 +423,7 @@ end
 
 function M.tabpage_to_view(tabpage)
   for _, view in ipairs(M.views) do
-    if view.tabpage == tabpage then
-      return view
-    end
+    if view.tabpage == tabpage then return view end
   end
 end
 
@@ -399,9 +443,7 @@ function M.get_prev_non_view_tabpage()
       return prev_tab
     else
       for _, id in ipairs(tabs) do
-        if not seen[id] then
-          return id
-        end
+        if not seen[id] then return id end
       end
     end
   end
@@ -420,9 +462,7 @@ function M.is_buf_in_use(bufnr, ignore)
 
       for _, file in ipairs(view.cur_entry and view.cur_entry.layout:files() or {}) do
         if file:is_valid() and file.bufnr == bufnr then
-          if not ignore_map[file] then
-            return true
-          end
+          if not ignore_map[file] then return true end
         end
       end
     end

@@ -84,6 +84,28 @@ COMMANDS                                        *diffview-commands*
             :DiffviewOpen -uno
 <
 
+                                                *:DiffviewShow*
+:DiffviewShow {git-rev | jj-change} [options] [ -- {paths...}]
+
+        Opens a new Diffview for the changes introduced by exactly one commit
+        or JJ change. Additional {paths...} may be provided to narrow down
+        what files are shown. If the `-C` flag is not defined, the git
+        top-level is determined from the current buffer when possible.
+        Otherwise it's determined from the cwd.
+
+        Examples: >vim
+
+            " Show the diff for one git commit:
+            :DiffviewShow HEAD~2
+            :DiffviewShow d4a7b0d
+
+            " Show the diff for one JJ change:
+            :DiffviewShow qpvuntsm
+
+            " Limit the scope to the given paths:
+            :DiffviewShow HEAD~2 -- lua/diffview plugin
+<
+
                                                 *diffview-staging*
         You can stage individual hunks by editing any buffer that represents
         the index (after running `:DiffviewOpen` with no [git-rev] the entries
@@ -446,6 +468,8 @@ COMMANDS                                        *diffview-commands*
 
                                                 *:DiffviewClose*
 :DiffviewClose          Close the active Diffview.
+
+:DiffviewShow           Open the active repository diff for a single commit.
 
                                                 *:DiffviewToggleFiles*
 :DiffviewToggleFiles    Toggles the file panel.

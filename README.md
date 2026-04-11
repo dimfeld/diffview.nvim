@@ -235,6 +235,18 @@ You can also provide additional paths to narrow down what files are shown:
 
 - `:DiffviewOpen HEAD~2 -- lua/diffview plugin`
 
+### `:DiffviewShow {git rev | jj change} [options] [ -- {paths...}]`
+
+Calling `:DiffviewShow` opens the diff introduced by exactly one commit or JJ
+change. Unlike `:DiffviewOpen <rev>`, it does not compare that revision against
+your working tree.
+
+Examples:
+
+- `:DiffviewShow d4a7b0d`
+- `:DiffviewShow qpvuntsm`
+- `:DiffviewShow HEAD~2 -- lua/diffview`
+
 For information about additional `[options]`, visit the
 [documentation](https://github.com/sindrets/diffview.nvim/blob/main/doc/diffview.txt).
 
