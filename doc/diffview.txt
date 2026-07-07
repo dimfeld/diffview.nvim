@@ -422,6 +422,7 @@ COMMANDS                                        *diffview-commands*
               "groups": [
                 {
                   "name": "Frontend Changes",
+                  "description": "Notes shown as a Description entry.",
                   "files": [
                     { "path": "src/components/Login.tsx" },
                     { "path": "src/components/Signup.tsx" }
@@ -446,6 +447,11 @@ COMMANDS                                        *diffview-commands*
                 {name} (string, required)
                     Section header text displayed in the file panel.
 
+                {description} (string, optional)
+                    Section notes displayed as a generated file named
+                    "Description" at the top of the section. Opening this
+                    entry shows the description text in the file buffer.
+
                 {files} (array, required)
                     Array of file entries.
 
@@ -455,7 +461,8 @@ COMMANDS                                        *diffview-commands*
         Filtering Behavior: ~
             • Files with no changes at the specified revisions are filtered out
             • Missing files show a warning but the view continues with valid files
-            • Empty groups (after filtering) are hidden
+            • Empty groups (after filtering) are hidden unless they have a
+              description
             • If all groups are empty after filtering, an error is shown
 
         Notes: ~

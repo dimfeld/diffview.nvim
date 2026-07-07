@@ -51,6 +51,11 @@ end
 ---@param b Node
 ---@return boolean true if node a comes before node b
 function Node.comparator(a, b)
+  local a_is_description = a.data and a.data.is_json_description
+  local b_is_description = b.data and b.data.is_json_description
+
+  if a_is_description ~= b_is_description then return a_is_description end
+
   if a:has_children() == b:has_children() then
     return string.lower(a.name) < string.lower(b.name)
   else

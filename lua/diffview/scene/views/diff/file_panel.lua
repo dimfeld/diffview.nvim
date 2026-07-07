@@ -64,9 +64,7 @@ function FilePanel:init(adapter, files, path_args, rev_pretty_name)
   self.tree_options = conf.file_panel.tree_options
 
   self:on_autocmd("BufNew", {
-    callback = function()
-      self:setup_buffer()
-    end,
+    callback = function() self:setup_buffer() end,
   })
 end
 
@@ -93,9 +91,7 @@ function FilePanel:update_components()
   if self.files.is_grouped and self.files:is_grouped() then
     local schema = { { name = "path" } }
     local group_component_names = {}
-    local file_filter = function(file)
-      return self:should_show_file(file)
-    end
+    local file_filter = function(file) return self:should_show_file(file) end
 
     for i, group in ipairs(self.files.groups) do
       local files_schema
@@ -188,7 +184,6 @@ function FilePanel:update_components()
         })
       end
     end
-
   elseif self.listing_style == "tree" then
     self.files.conflicting_tree:update_statuses()
     self.files.working_tree:update_statuses()
@@ -197,9 +192,7 @@ function FilePanel:update_components()
     -- Create filter function for tree schema if review filter is enabled
     local file_filter = nil
     if self.view and self.view.review_filter_enabled then
-      file_filter = function(file)
-        return self:should_show_file(file)
-      end
+      file_filter = function(file) return self:should_show_file(file) end
     end
 
     conflicting_files = utils.tbl_merge(
@@ -267,9 +260,9 @@ end
 ---@param file FileEntry
 ---@return boolean
 function FilePanel:should_show_file(file)
-  if not self.view or not self.view.review_filter_enabled then
-    return true
-  end
+  if file.is_json_description then return true end
+
+  if not self.view or not self.view.review_filter_enabled then return true end
 
   -- Use the view's cached status method if available (DiffView has it)
   -- This avoids spawning git processes per file during filtering
@@ -310,18 +303,14 @@ function FilePanel:ordered_file_list()
       )
     end
 
-    files = vim.tbl_map(function(node)
-      return node.data
-    end, nodes) --[[@as vector ]]
+    files = vim.tbl_map(function(node) return node.data end, nodes) --[[@as vector ]]
   end
 
   -- Apply review filter if enabled
   if self.view and self.view.review_filter_enabled then
     local filtered = {}
     for _, file in ipairs(files) do
-      if self:should_show_file(file) then
-        filtered[#filtered + 1] = file
-      end
+      if self:should_show_file(file) then filtered[#filtered + 1] = file end
     end
     return filtered
   end
@@ -330,14 +319,10 @@ function FilePanel:ordered_file_list()
 end
 
 function FilePanel:set_cur_file(file)
-  if self.cur_file then
-    self.cur_file:set_active(false)
-  end
+  if self.cur_file then self.cur_file:set_active(false) end
 
   self.cur_file = file
-  if self.cur_file then
-    self.cur_file:set_active(true)
-  end
+  if self.cur_file then self.cur_file:set_active(true) end
 end
 
 function FilePanel:prev_file()
@@ -404,9 +389,7 @@ function FilePanel:get_dir_at_cursor()
 end
 
 function FilePanel:highlight_file(file)
-  if not (self:is_open() and self:buf_loaded()) then
-    return
-  end
+  if not (self:is_open() and self:buf_loaded()) then return end
 
   if self.listing_style == "list" then
     local file_lists
@@ -431,7 +414,6 @@ function FilePanel:highlight_file(file)
         end
       end
     end
-
   else -- tree
     local file_lists
 
@@ -482,15 +464,11 @@ function FilePanel:highlight_file(file)
 end
 
 function FilePanel:highlight_cur_file()
-  if self.cur_file then
-    self:highlight_file(self.cur_file)
-  end
+  if self.cur_file then self:highlight_file(self.cur_file) end
 end
 
 function FilePanel:highlight_prev_file()
-  if not (self:is_open() and self:buf_loaded()) or self.files:len() == 0 then
-    return
-  end
+  if not (self:is_open() and self:buf_loaded()) or self.files:len() == 0 then return end
 
   pcall(
     api.nvim_win_set_cursor,
@@ -501,9 +479,7 @@ function FilePanel:highlight_prev_file()
 end
 
 function FilePanel:highlight_next_file()
-  if not (self:is_open() and self:buf_loaded()) or self.files:len() == 0 then
-    return
-  end
+  if not (self:is_open() and self:buf_loaded()) or self.files:len() == 0 then return end
 
   pcall(api.nvim_win_set_cursor, self.winid, {
     self.constrain_cursor(self.winid, vim.v.count1),
@@ -513,9 +489,7 @@ function FilePanel:highlight_next_file()
 end
 
 function FilePanel:reconstrain_cursor()
-  if not (self:is_open() and self:buf_loaded()) or self.files:len() == 0 then
-    return
-  end
+  if not (self:is_open() and self:buf_loaded()) or self.files:len() == 0 then return end
 
   pcall(api.nvim_win_set_cursor, self.winid, {
     self.constrain_cursor(self.winid, 0),
@@ -542,13 +516,9 @@ function FilePanel:set_item_fold(item, open)
   end
 end
 
-function FilePanel:toggle_item_fold(item)
-  self:set_item_fold(item, item.collapsed)
-end
+function FilePanel:toggle_item_fold(item) self:set_item_fold(item, item.collapsed) end
 
-function FilePanel:render()
-  require("diffview.scene.views.diff.render")(self)
-end
+function FilePanel:render() require("diffview.scene.views.diff.render")(self) end
 
 M.FilePanel = FilePanel
 return M

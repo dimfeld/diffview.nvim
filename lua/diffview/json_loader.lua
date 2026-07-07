@@ -8,6 +8,7 @@ local M = {}
 
 ---@class JsonGroup
 ---@field name string
+---@field description? string
 ---@field files JsonFileSpec[]
 
 ---@class JsonData
@@ -19,9 +20,7 @@ local MAX_JSON_SIZE = 10 * 1024 * 1024
 local function read_file(file_path)
   local fd
   local function close_fd()
-    if not fd then
-      return true
-    end
+    if not fd then return true end
 
     local close_ok, close_err = pcall(uv.fs_close, fd)
     fd = nil
@@ -44,13 +43,9 @@ local function read_file(file_path)
 
   local close_ok, close_err = close_fd()
 
-  if not ok then
-    return nil, result
-  end
+  if not ok then return nil, result end
 
-  if not close_ok then
-    return nil, close_err
-  end
+  if not close_ok then return nil, close_err end
 
   return result
 end
@@ -59,9 +54,7 @@ end
 ---@return boolean valid
 ---@return string|nil error
 function M.validate_schema(data)
-  if type(data) ~= "table" then
-    return false, "JSON root must be an object"
-  end
+  if type(data) ~= "table" then return false, "JSON root must be an object" end
 
   if data.title ~= nil and type(data.title) ~= "string" then
     return false, "title must be a string"
@@ -71,17 +64,17 @@ function M.validate_schema(data)
     return false, "groups must be an array"
   end
 
-  if #data.groups == 0 then
-    return false, "groups must not be empty"
-  end
+  if #data.groups == 0 then return false, "groups must not be empty" end
 
   for i, group in ipairs(data.groups) do
-    if type(group) ~= "table" then
-      return false, ("group %d must be an object"):format(i)
-    end
+    if type(group) ~= "table" then return false, ("group %d must be an object"):format(i) end
 
     if type(group.name) ~= "string" or group.name == "" then
       return false, ("group %d name must be a non-empty string"):format(i)
+    end
+
+    if group.description ~= nil and type(group.description) ~= "string" then
+      return false, ("group %d description must be a string"):format(i)
     end
 
     if type(group.files) ~= "table" or not utils.islist(group.files) then
@@ -112,14 +105,10 @@ function M.load_json(file_path)
   end
 
   local decode_ok, data = pcall(vim.json.decode, content)
-  if not decode_ok or not data then
-    return nil, "Failed to parse JSON"
-  end
+  if not decode_ok or not data then return nil, "Failed to parse JSON" end
 
   local valid, err = M.validate_schema(data)
-  if not valid then
-    return nil, err
-  end
+  if not valid then return nil, err end
 
   return data
 end

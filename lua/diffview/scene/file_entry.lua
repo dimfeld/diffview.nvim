@@ -40,6 +40,7 @@ local fstat_cache = {}
 ---@field kind vcs.FileKind
 ---@field commit Commit|nil
 ---@field merge_ctx vcs.MergeContext?
+---@field is_json_description boolean?
 ---@field active boolean
 ---@field opened boolean
 local FileEntry = oop.create_class("FileEntry")
@@ -155,10 +156,12 @@ function FileEntry:validate_stage_buffers(stat)
 
             if new_hash and new_hash ~= f.blob_hash then
               if is_modified then
-                utils.warn((
-                  "A file was changed in the index since you started editing it!"
-                  .. " Be careful not to lose any staged changes when writing to this buffer: %s"
-                ):format(api.nvim_buf_get_name(f.bufnr)))
+                utils.warn(
+                  (
+                    "A file was changed in the index since you started editing it!"
+                    .. " Be careful not to lose any staged changes when writing to this buffer: %s"
+                  ):format(api.nvim_buf_get_name(f.bufnr))
+                )
               else
                 f:dispose_buffer()
               end
@@ -179,7 +182,11 @@ end
 ---@param ctx? vcs.MergeContext
 function FileEntry:update_merge_context(ctx)
   ctx = ctx or self.merge_ctx
-  if ctx then self.merge_ctx = ctx else return end
+  if ctx then
+    self.merge_ctx = ctx
+  else
+    return
+  end
 
   local layout = self.layout --[[@as Diff4 ]]
 
@@ -190,9 +197,7 @@ function FileEntry:update_merge_context(ctx)
     )
   end
 
-  if layout.b then
-    layout.b.file.winbar = " LOCAL (Working tree)"
-  end
+  if layout.b then layout.b.file.winbar = " LOCAL (Working tree)" end
 
   if layout.c then
     layout.c.file.winbar = (" THEIRS (Incoming changes) %s %s"):format(
@@ -272,9 +277,7 @@ end
 ---@return boolean
 function FileEntry:has_patch_folds()
   for _, file in ipairs(self.layout:files()) do
-    if not file.custom_folds or file.custom_folds.type ~= "diff_patch" then
-      return false
-    end
+    if not file.custom_folds or file.custom_folds.type ~= "diff_patch" then return false end
   end
 
   return true
@@ -291,9 +294,7 @@ function FileEntry.update_index_stat(adapter, stat)
   stat = stat or pl:stat(pl:join(adapter.ctx.toplevel, "index"))
 
   if stat then
-    if not fstat_cache[adapter.ctx.toplevel] then
-      fstat_cache[adapter.ctx.toplevel] = {}
-    end
+    if not fstat_cache[adapter.ctx.toplevel] then fstat_cache[adapter.ctx.toplevel] = {} end
 
     fstat_cache[adapter.ctx.toplevel].index = {
       mtime = stat.mtime.sec,
@@ -303,6 +304,8 @@ end
 
 ---@class FileEntry.with_layout.Opt : FileEntry.init.Opt
 ---@field nulled boolean
+---@field binary? boolean
+---@field filetype? string
 ---@field get_data git.FileDataProducer?
 
 ---@param layout_class Layout (class)
@@ -314,7 +317,9 @@ function FileEntry.with_layout(layout_class, opt)
       adapter = opt.adapter,
       path = symbol == "a" and opt.oldpath or opt.path,
       kind = opt.kind,
+      binary = opt.binary,
       commit = opt.commit,
+      filetype = opt.filetype,
       get_data = opt.get_data,
       rev = rev,
       nulled = utils.sate(
@@ -351,7 +356,7 @@ function FileEntry.new_null_entry(adapter)
     nulled = true,
     layout = Diff1({
       b = File.NULL_FILE,
-    })
+    }),
   })
 end
 

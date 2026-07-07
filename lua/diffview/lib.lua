@@ -5,7 +5,10 @@ local FileHistoryView =
   lazy.access("diffview.scene.views.file_history.file_history_view", "FileHistoryView") ---@type FileHistoryView|LazyModule
 local StandardView = lazy.access("diffview.scene.views.standard.standard_view", "StandardView") ---@type StandardView|LazyModule
 local GroupedFileDict = lazy.access("diffview.grouped_file_dict", "GroupedFileDict") ---@type GroupedFileDict|LazyModule
+local Diff1 = lazy.access("diffview.scene.layouts.diff_1", "Diff1") ---@type Diff1|LazyModule
+local FileEntry = lazy.access("diffview.scene.file_entry", "FileEntry") ---@type FileEntry|LazyModule
 local GitAdapter = lazy.access("diffview.vcs.adapters.git", "GitAdapter") ---@type GitAdapter|LazyModule
+local Rev = lazy.access("diffview.vcs.rev", "Rev") ---@type Rev|LazyModule
 local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|LazyModule
 local async = lazy.require("diffview.async") ---@module "diffview.async"
 local arg_parser = lazy.require("diffview.arg_parser") ---@module "diffview.arg_parser"
@@ -24,6 +27,42 @@ local M = {}
 
 ---@type View[]
 M.views = {}
+
+local function split_description_lines(description)
+  return vim.split(description, "\n", { plain = true })
+end
+
+local function create_description_entry(adapter, group_index, description)
+  local internal_path = (".diffview-json/descriptions/%d/Description"):format(group_index)
+  local entry = FileEntry.with_layout(Diff1.__get(), {
+    adapter = adapter,
+    path = internal_path,
+    oldpath = internal_path,
+    revs = {
+      a = Rev(RevType.CUSTOM, "description"),
+      b = Rev(RevType.CUSTOM, "description"),
+      c = Rev(RevType.CUSTOM, "description"),
+      d = Rev(RevType.CUSTOM, "description"),
+    },
+    status = " ",
+    stats = nil,
+    kind = "working",
+    binary = false,
+    filetype = "markdown",
+    get_data = function() return split_description_lines(description) end,
+    nulled = false,
+  })
+
+  entry.path = "Description"
+  entry.oldpath = "Description"
+  entry.absolute_path = pl:absolute(entry.path, adapter.ctx.toplevel)
+  entry.parent_path = ""
+  entry.basename = "Description"
+  entry.extension = nil
+  entry.is_json_description = true
+
+  return entry
+end
 
 function M.diffview_open(args)
   local default_args = config.get_config().default_args.DiffviewOpen
@@ -174,19 +213,19 @@ local function build_grouped_files(adapter, left, right, dv_opt, data)
     end
   end
 
-  if #paths == 0 then return GroupedFileDict(data.title), nil, {}, false end
-
   local err, file_dict
-  local layout_opt = {
-    default_layout = DiffView.get_default_layout(),
-    merge_layout = DiffView.get_default_merge_layout(),
-  }
-  async.sync_void(function()
-    err, file_dict =
-      await(vcs_utils.diff_file_list(adapter, left, right, paths, dv_opt, layout_opt))
-  end)()
+  if #paths > 0 then
+    local layout_opt = {
+      default_layout = DiffView.get_default_layout(),
+      merge_layout = DiffView.get_default_merge_layout(),
+    }
+    async.sync_void(function()
+      err, file_dict =
+        await(vcs_utils.diff_file_list(adapter, left, right, paths, dv_opt, layout_opt))
+    end)()
 
-  if err then return nil, err end
+    if err then return nil, err end
+  end
 
   file_dict = file_dict or { working = {}, staged = {}, conflicting = {} }
 
@@ -235,8 +274,14 @@ local function build_grouped_files(adapter, left, right, dv_opt, data)
   local has_any = false
   local merge_ctx = nil
 
-  for _, group in ipairs(data.groups) do
+  for group_index, group in ipairs(data.groups) do
     local group_entries = {}
+    if group.description ~= nil then
+      group_entries[#group_entries + 1] =
+        create_description_entry(adapter, group_index, group.description)
+      has_any = true
+    end
+
     for _, file_spec in ipairs(group.files) do
       local entry = entry_by_path[file_spec.path]
       if entry then

@@ -12,18 +12,16 @@ local pl = lazy.access(utils, "path") ---@type PathLib
 ---@param view DiffView|nil
 ---@return integer pending_count, integer total_count
 local function count_pending_files(panel, view)
-  if not view or not view.review_state then
-    return 0, 0
-  end
+  if not view or not view.review_state then return 0, 0 end
 
   local pending = 0
   local total = 0
 
   for _, file in panel.files:iter() do
-    total = total + 1
-    local status = review.get_file_status(view, file)
-    if status == "unreviewed" or status == "changed" then
-      pending = pending + 1
+    if not file.is_json_description then
+      total = total + 1
+      local status = review.get_file_status(view, file)
+      if status == "unreviewed" or status == "changed" then pending = pending + 1 end
     end
   end
 
@@ -35,15 +33,15 @@ end
 ---@param view DiffView|nil
 ---@return integer visible_count
 local function count_visible_section_files(files, view)
-  if not view or not view.review_filter_enabled then
-    return #files
-  end
+  if not view or not view.review_filter_enabled then return #files end
 
   local count = 0
   for _, file in ipairs(files) do
-    local status = review.get_file_status(view, file)
-    if status == "unreviewed" or status == "changed" then
+    if file.is_json_description then
       count = count + 1
+    else
+      local status = review.get_file_status(view, file)
+      if status == "unreviewed" or status == "changed" then count = count + 1 end
     end
   end
   return count
@@ -61,7 +59,13 @@ local function render_file(comp, show_path, depth, view)
   comp:add_text(file.status .. " ", hl.get_git_hl(file.status))
 
   -- Review status indicator
-  if view and view.review_state and conf.review and conf.review.enabled then
+  if
+    view
+    and view.review_state
+    and conf.review
+    and conf.review.enabled
+    and not file.is_json_description
+  then
     local review_status = review.get_file_status(view, file)
     if review_status then
       local symbol = conf.review.symbols[review_status] or "?"
@@ -69,13 +73,14 @@ local function render_file(comp, show_path, depth, view)
     end
   end
 
-  if depth then
-    comp:add_text(string.rep(" ", depth * 2 + 2))
-  end
+  if depth then comp:add_text(string.rep(" ", depth * 2 + 2)) end
 
   local icon, icon_hl = hl.get_file_icon(file.basename, file.extension)
   comp:add_text(icon, icon_hl)
-  comp:add_text(file.basename, file.active and "DiffviewFilePanelSelected" or "DiffviewFilePanelFileName")
+  comp:add_text(
+    file.basename,
+    file.active and "DiffviewFilePanelSelected" or "DiffviewFilePanelFileName"
+  )
 
   if file.stats then
     if file.stats.additions then
@@ -95,9 +100,7 @@ local function render_file(comp, show_path, depth, view)
     comp:add_text(" !", "DiffviewFilePanelConflicts")
   end
 
-  if show_path then
-    comp:add_text(" " .. file.parent_path, "DiffviewFilePanelPath")
-  end
+  if show_path then comp:add_text(" " .. file.parent_path, "DiffviewFilePanelPath") end
 
   comp:ln()
 end
@@ -184,17 +187,13 @@ end
 ---@param comp RenderComponent
 ---@param view DiffView|nil
 local function render_files(listing_style, comp, view)
-  if listing_style == "list" then
-    return render_file_list(comp, view)
-  end
+  if listing_style == "list" then return render_file_list(comp, view) end
   render_file_tree(comp, view)
 end
 
 ---@param panel FilePanel
 return function(panel)
-  if not panel.render_data then
-    return
-  end
+  if not panel.render_data then return end
 
   panel.render_data:clear()
   local conf = config.get_config()
@@ -222,9 +221,7 @@ return function(panel)
     comp:ln()
   end
 
-  if conf.show_help_hints and panel.help_mapping then
-    comp:ln()
-  end
+  if conf.show_help_hints and panel.help_mapping then comp:ln() end
 
   if panel.files.is_grouped and panel.files:is_grouped() then
     if panel.files.title then
@@ -253,7 +250,10 @@ return function(panel)
       comp:add_text("Conflicts ", "DiffviewFilePanelTitle")
       if view and view.review_filter_enabled then
         local visible = count_visible_section_files(panel.files.conflicting, view)
-        comp:add_text(string.format("(%d/%d)", visible, #panel.files.conflicting), "DiffviewFilePanelCounter")
+        comp:add_text(
+          string.format("(%d/%d)", visible, #panel.files.conflicting),
+          "DiffviewFilePanelCounter"
+        )
       else
         comp:add_text("(" .. #panel.files.conflicting .. ")", "DiffviewFilePanelCounter")
       end
@@ -272,7 +272,10 @@ return function(panel)
       comp:add_text("Changes ", "DiffviewFilePanelTitle")
       if view and view.review_filter_enabled then
         local visible = count_visible_section_files(panel.files.working, view)
-        comp:add_text(string.format("(%d/%d)", visible, #panel.files.working), "DiffviewFilePanelCounter")
+        comp:add_text(
+          string.format("(%d/%d)", visible, #panel.files.working),
+          "DiffviewFilePanelCounter"
+        )
       else
         comp:add_text("(" .. #panel.files.working .. ")", "DiffviewFilePanelCounter")
       end
@@ -287,7 +290,10 @@ return function(panel)
       comp:add_text("Staged changes ", "DiffviewFilePanelTitle")
       if view and view.review_filter_enabled then
         local visible = count_visible_section_files(panel.files.staged, view)
-        comp:add_text(string.format("(%d/%d)", visible, #panel.files.staged), "DiffviewFilePanelCounter")
+        comp:add_text(
+          string.format("(%d/%d)", visible, #panel.files.staged),
+          "DiffviewFilePanelCounter"
+        )
       else
         comp:add_text("(" .. #panel.files.staged .. ")", "DiffviewFilePanelCounter")
       end

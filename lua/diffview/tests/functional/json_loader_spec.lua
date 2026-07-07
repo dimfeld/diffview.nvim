@@ -8,18 +8,14 @@ local json_loader = require("diffview.json_loader")
 
 local function rm_rf(path)
   local stat = uv.fs_stat(path)
-  if not stat then
-    return
-  end
+  if not stat then return end
 
   if stat.type == "directory" then
     local handle = uv.fs_scandir(path)
     if handle then
       while true do
         local name = uv.fs_scandir_next(handle)
-        if not name then
-          break
-        end
+        if not name then break end
         rm_rf(path .. "/" .. name)
       end
     end
@@ -44,9 +40,7 @@ describe("diffview.json_loader", function()
     assert(uv.fs_mkdir(test_dir, tonumber("0755", 8)))
   end)
 
-  after_each(function()
-    rm_rf(test_dir)
-  end)
+  after_each(function() rm_rf(test_dir) end)
 
   describe("validate_schema", function()
     it("accepts valid JSON data", function()
@@ -55,6 +49,7 @@ describe("diffview.json_loader", function()
         groups = {
           {
             name = "Group A",
+            description = "Review the UI flow first.",
             files = {
               { path = "src/foo.lua" },
               { path = "src/bar.lua" },
@@ -71,6 +66,16 @@ describe("diffview.json_loader", function()
 
       eq(true, valid)
       eq(nil, err)
+    end)
+
+    it("rejects non-string group descriptions", function()
+      local valid, err = json_loader.validate_schema({
+        groups = {
+          { name = "Group", description = 123, files = {} },
+        },
+      })
+      eq(false, valid)
+      eq("group 1 description must be a string", err)
     end)
 
     it("rejects non-object roots", function()
@@ -184,15 +189,9 @@ describe("diffview.json_loader", function()
 
     it("returns an error when the JSON file exceeds the size limit", function()
       local max_size = 10 * 1024 * 1024
-      local open_stub = stub(uv, "fs_open", function()
-        return 1
-      end)
-      local fstat_stub = stub(uv, "fs_fstat", function()
-        return { size = max_size + 1 }
-      end)
-      local close_stub = stub(uv, "fs_close", function()
-        return true
-      end)
+      local open_stub = stub(uv, "fs_open", function() return 1 end)
+      local fstat_stub = stub(uv, "fs_fstat", function() return { size = max_size + 1 } end)
+      local close_stub = stub(uv, "fs_close", function() return true end)
 
       local data, err = json_loader.load_json(test_dir .. "/too_large.json")
       eq(nil, data)

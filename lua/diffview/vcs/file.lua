@@ -43,6 +43,7 @@ local HAS_NVIM_0_10 = vim.fn.has("nvim-0.10") == 1
 ---@field ready boolean
 ---@field winbar string?
 ---@field winopts WindowOptions
+---@field filetype? string
 ---@field custom_folds? CustomFolds
 local File = oop.create_class("vcs.File")
 
@@ -77,6 +78,7 @@ function File:init(opt)
   self.commit = opt.commit
   self.symbol = opt.symbol
   self.get_data = opt.get_data
+  self.filetype = opt.filetype
   self.active = false
   self.ready = false
 
@@ -288,9 +290,14 @@ File.create_buffer = async.wrap(function(self, callback)
   vim.bo[self.bufnr].modifiable = true
   api.nvim_buf_set_lines(self.bufnr, 0, -1, false, lines)
 
-  api.nvim_buf_call(self.bufnr, function()
-    vim.cmd("filetype detect")
-  end)
+  if self.filetype then
+    api.nvim_buf_call(
+      self.bufnr,
+      function() vim.cmd("noautocmd setlocal filetype=" .. self.filetype) end
+    )
+  else
+    api.nvim_buf_call(self.bufnr, function() vim.cmd("filetype detect") end)
+  end
 
   vim.bo[self.bufnr].modifiable = last_modifiable
   vim.bo[self.bufnr].modified = last_modified

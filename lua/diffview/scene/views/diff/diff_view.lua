@@ -150,9 +150,7 @@ function DiffView:post_open()
 
       if self.files:len() > 0 and not self.panel.cur_file then
         local entry = self.panel:next_file()
-        if entry then
-          self:set_file(entry, false, true)
-        end
+        if entry then self:set_file(entry, false, true) end
       end
 
       self.initialized = true
@@ -770,19 +768,17 @@ function DiffView:is_valid() return self.valid end
 function DiffView:get_file_review_status(file_entry)
   if not self.review_state then return nil end
 
-  if not file_entry or not file_entry.path then return nil end
+  if not file_entry or not file_entry.path or file_entry.is_json_description then return nil end
 
   -- Try to use cached status first
   if self.review_status_cache_valid and self.review_status_cache then
     local cached = self.review_status_cache[file_entry.path]
-    if cached then
-      return cached
-    end
+    if cached then return cached end
     -- Path not in cache could mean it's a new file, fall through to direct lookup
     -- Log this to help detect cases where per-file git lookups occur despite caching
-    logger:lvl(5):debug(
-      "[DiffView] Review status cache miss for path not in cache: " .. file_entry.path
-    )
+    logger
+      :lvl(5)
+      :debug("[DiffView] Review status cache miss for path not in cache: " .. file_entry.path)
   end
 
   -- Fall back to direct lookup (expensive - spawns a git process)
@@ -797,9 +793,7 @@ end
 ---@param reason? string Optional reason for logging
 function DiffView:invalidate_review_status_cache(reason)
   self.review_status_cache_valid = false
-  if reason then
-    logger:lvl(5):debug("[DiffView] Review status cache invalidated: " .. reason)
-  end
+  if reason then logger:lvl(5):debug("[DiffView] Review status cache invalidated: " .. reason) end
 end
 
 ---Rebuild the review status cache for all files in the view.
@@ -826,9 +820,7 @@ function DiffView:rebuild_review_status_cache()
   local paths_needing_blob_hash = {}
 
   for _, file in self.files:iter() do
-    if file.path then
-      all_paths[#all_paths + 1] = file.path
-    end
+    if file.path and not file.is_json_description then all_paths[#all_paths + 1] = file.path end
   end
 
   -- First pass: use commit_hash short-circuit for reviewed files
@@ -871,18 +863,19 @@ function DiffView:rebuild_review_status_cache()
   self.review_status_cache_valid = true
   logger:lvl(5):debug(
     "[DiffView] Review status cache rebuilt: "
-    .. #all_paths .. " files, "
-    .. (#all_paths - #paths_needing_blob_hash) .. " short-circuited, "
-    .. #paths_needing_blob_hash .. " needed blob lookup"
+      .. #all_paths
+      .. " files, "
+      .. (#all_paths - #paths_needing_blob_hash)
+      .. " short-circuited, "
+      .. #paths_needing_blob_hash
+      .. " needed blob lookup"
   )
 end
 
 ---Ensure the review status cache is valid, rebuilding if necessary.
 ---Call this before accessing cached statuses in bulk operations.
 function DiffView:ensure_review_status_cache()
-  if not self.review_status_cache_valid then
-    self:rebuild_review_status_cache()
-  end
+  if not self.review_status_cache_valid then self:rebuild_review_status_cache() end
 end
 
 ---Get a cached review status, ensuring cache is valid.
@@ -891,7 +884,7 @@ end
 ---@return "unreviewed"|"reviewed"|"changed"|nil status
 function DiffView:get_cached_review_status(file_entry)
   if not self.review_state then return nil end
-  if not file_entry or not file_entry.path then return nil end
+  if not file_entry or not file_entry.path or file_entry.is_json_description then return nil end
 
   self:ensure_review_status_cache()
 
@@ -905,7 +898,12 @@ end
 ---@param skip_filter_when_panel_filtered? boolean If true and review_filter_enabled, skip status filtering (panel already filtered)
 ---@return FileEntry|nil target_file The file navigated to, or nil if none found
 ---@private
-function DiffView:_navigate_review_file(delta, status_filter, label, skip_filter_when_panel_filtered)
+function DiffView:_navigate_review_file(
+  delta,
+  status_filter,
+  label,
+  skip_filter_when_panel_filtered
+)
   self:ensure_layout()
 
   if self:file_safeguard() then return nil end
@@ -991,7 +989,13 @@ end
 ---@param skip_filter_when_panel_filtered? boolean If true and review_filter_enabled, skip status filtering (panel already filtered)
 ---@return FileEntry|nil target_file The file navigated to, or nil if none found
 ---@private
-function DiffView:_navigate_review_file_from_entry(file_entry, delta, status_filter, label, skip_filter_when_panel_filtered)
+function DiffView:_navigate_review_file_from_entry(
+  file_entry,
+  delta,
+  status_filter,
+  label,
+  skip_filter_when_panel_filtered
+)
   self:ensure_layout()
 
   if self:file_safeguard() then return nil end
@@ -1097,7 +1101,7 @@ function DiffView:next_pending_review_file()
     1,
     function(status) return status == "unreviewed" or status == "changed" end,
     "Pending review",
-    true  -- Skip filter when panel already filtered to pending files
+    true -- Skip filter when panel already filtered to pending files
   )
 end
 
@@ -1110,7 +1114,7 @@ function DiffView:next_pending_review_file_from(file_entry)
     1,
     function(status) return status == "unreviewed" or status == "changed" end,
     "Pending review",
-    true  -- Skip filter when panel already filtered to pending files
+    true -- Skip filter when panel already filtered to pending files
   )
 end
 
@@ -1122,7 +1126,7 @@ function DiffView:prev_pending_review_file()
     -1,
     function(status) return status == "unreviewed" or status == "changed" end,
     "Pending review",
-    true  -- Skip filter when panel already filtered to pending files
+    true -- Skip filter when panel already filtered to pending files
   )
 end
 
@@ -1135,7 +1139,7 @@ function DiffView:prev_pending_review_file_from(file_entry)
     -1,
     function(status) return status == "unreviewed" or status == "changed" end,
     "Pending review",
-    true  -- Skip filter when panel already filtered to pending files
+    true -- Skip filter when panel already filtered to pending files
   )
 end
 
@@ -1210,18 +1214,14 @@ function DiffView:toggle_review_filter()
       end
     end
 
-    api.nvim_echo(
+    api.nvim_echo({
       {
-        {
-          ("Review filter ON: showing %d/%d files pending review"):format(
-            #visible_files,
-            total_files
-          ),
-        },
+        ("Review filter ON: showing %d/%d files pending review"):format(
+          #visible_files,
+          total_files
+        ),
       },
-      false,
-      {}
-    )
+    }, false, {})
   else
     api.nvim_echo({ { "Review filter OFF: showing all files" } }, false, {})
   end
@@ -1289,19 +1289,15 @@ function DiffView:toggle_since_review_mode()
       visible_count = #self.panel:ordered_file_list()
     end
     if self.files and self.files.len then total_count = self.files:len() end
-    api.nvim_echo(
+    api.nvim_echo({
       {
-        {
-          fmt(
-            "Since-review mode ON: showing %d/%d files (changed files show diff since last review)",
-            visible_count,
-            total_count
-          ),
-        },
+        fmt(
+          "Since-review mode ON: showing %d/%d files (changed files show diff since last review)",
+          visible_count,
+          total_count
+        ),
       },
-      false,
-      {}
-    )
+    }, false, {})
   else
     api.nvim_echo({ { "Since-review mode OFF: showing full diff" } }, false, {})
   end
@@ -1350,7 +1346,9 @@ end
 function DiffView:get_since_review_entry(file_entry)
   if not self.review_state then return nil, "Review mode is not enabled" end
 
-  if not file_entry or not file_entry.path then return nil, "Invalid file entry" end
+  if not file_entry or not file_entry.path or file_entry.is_json_description then
+    return nil, "Invalid file entry"
+  end
 
   local review_entry = self.review_state:get_file(file_entry.path)
   if not review_entry then return nil, "File has not been reviewed" end

@@ -1,6 +1,7 @@
 local helpers = require("diffview.tests.helpers")
 local eq = helpers.eq
 local async_test = helpers.async_test
+local await = require("diffview.async").await
 
 local config = require("diffview.config")
 local renderer = require("diffview.renderer")
@@ -19,18 +20,14 @@ local vcs = require("diffview.vcs")
 
 local function rm_rf(path)
   local stat = uv.fs_stat(path)
-  if not stat then
-    return
-  end
+  if not stat then return end
 
   if stat.type == "directory" then
     local handle = uv.fs_scandir(path)
     if handle then
       while true do
         local name = uv.fs_scandir_next(handle)
-        if not name then
-          break
-        end
+        if not name then break end
         rm_rf(path .. "/" .. name)
       end
     end
@@ -58,9 +55,7 @@ end
 local function make_waitable(...)
   local values = { ... }
   return {
-    await = function()
-      return unpack(values)
-    end,
+    await = function() return unpack(values) end,
   }
 end
 
@@ -127,9 +122,7 @@ describe("diffview.json_view_open", function()
     write_file(test_dir .. "/keep.lua", "print('ok')")
     write_file(test_dir .. "/unchanged.lua", "noop")
 
-    track_stub(json_loader, "load_json", function()
-      return data, nil
-    end)
+    track_stub(json_loader, "load_json", function() return data, nil end)
 
     local file_entry = make_file("keep.lua", "working", "M")
 
@@ -146,29 +139,15 @@ describe("diffview.json_view_open", function()
           options = {},
         }
       end,
-      rev_to_pretty_string = function()
-        return ""
-      end,
-      rev_to_args = function()
-        return {}
-      end,
-      tracked_files = function()
-        return make_waitable(nil, { file_entry }, {})
-      end,
-      show_untracked = function()
-        return false
-      end,
-      get_merge_context = function()
-        return nil
-      end,
-      instanceof = function()
-        return true
-      end,
+      rev_to_pretty_string = function() return "" end,
+      rev_to_args = function() return {} end,
+      tracked_files = function() return make_waitable(nil, { file_entry }, {}) end,
+      show_untracked = function() return false end,
+      get_merge_context = function() return nil end,
+      instanceof = function() return true end,
     }
 
-    track_stub(vcs, "get_adapter", function()
-      return nil, adapter
-    end)
+    track_stub(vcs, "get_adapter", function() return nil, adapter end)
 
     local warn_stub = track_stub(utils, "warn", function() end)
     local err_stub = track_stub(utils, "err", function() end)
@@ -207,9 +186,7 @@ describe("diffview.json_view_open", function()
 
     write_file(test_dir .. "/shared.lua", "print('ok')")
 
-    track_stub(json_loader, "load_json", function()
-      return data, nil
-    end)
+    track_stub(json_loader, "load_json", function() return data, nil end)
 
     local file_entry = make_file("shared.lua", "working", "M")
 
@@ -226,29 +203,15 @@ describe("diffview.json_view_open", function()
           options = {},
         }
       end,
-      rev_to_pretty_string = function()
-        return ""
-      end,
-      rev_to_args = function()
-        return {}
-      end,
-      tracked_files = function()
-        return make_waitable(nil, { file_entry }, {})
-      end,
-      show_untracked = function()
-        return false
-      end,
-      get_merge_context = function()
-        return nil
-      end,
-      instanceof = function()
-        return true
-      end,
+      rev_to_pretty_string = function() return "" end,
+      rev_to_args = function() return {} end,
+      tracked_files = function() return make_waitable(nil, { file_entry }, {}) end,
+      show_untracked = function() return false end,
+      get_merge_context = function() return nil end,
+      instanceof = function() return true end,
     }
 
-    track_stub(vcs, "get_adapter", function()
-      return nil, adapter
-    end)
+    track_stub(vcs, "get_adapter", function() return nil, adapter end)
 
     local warn_stub = track_stub(utils, "warn", function() end)
     local err_stub = track_stub(utils, "err", function() end)
@@ -262,6 +225,122 @@ describe("diffview.json_view_open", function()
 
     assert.stub(err_stub).was_not.called()
     assert.stub(warn_stub).was_not.called()
+  end)
+
+  it(
+    "adds section descriptions before changed files",
+    async_test(function()
+      local data = {
+        title = "Review",
+        groups = {
+          {
+            name = "Group A",
+            description = "Start here.\nThen review the file.",
+            files = {
+              { path = "keep.lua" },
+            },
+          },
+        },
+      }
+
+      write_file(test_dir .. "/keep.lua", "print('ok')")
+
+      track_stub(json_loader, "load_json", function() return data, nil end)
+
+      local file_entry = make_file("keep.lua", "working", "M")
+
+      local adapter = {
+        ctx = {
+          toplevel = test_dir,
+          dir = test_dir,
+          path_args = {},
+        },
+        diffview_options = function()
+          return {
+            left = { type = RevType.LOCAL },
+            right = { type = RevType.LOCAL },
+            options = {},
+          }
+        end,
+        rev_to_pretty_string = function() return "" end,
+        rev_to_args = function() return {} end,
+        tracked_files = function() return make_waitable(nil, { file_entry }, {}) end,
+        show_untracked = function() return false end,
+        get_merge_context = function() return nil end,
+        instanceof = function() return true end,
+      }
+
+      track_stub(vcs, "get_adapter", function() return nil, adapter end)
+
+      local warn_stub = track_stub(utils, "warn", function() end)
+      local view = lib.json_view_open(test_dir .. "/review.json", {})
+
+      assert(view ~= nil, "Expected view to be created")
+      eq(1, #view.files.groups)
+      eq(2, #view.files.groups[1].files)
+
+      local description = view.files.groups[1].files[1]
+      eq(true, description.is_json_description)
+      eq("Description", description.path)
+      eq("Description", description.basename)
+      eq("", description.parent_path)
+      eq({ "Start here.", "Then review the file." }, description.layout.b.file.get_data())
+      local bufnr = await(description.layout.b.file:create_buffer())
+      eq(
+        { "Start here.", "Then review the file." },
+        vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+      )
+      eq("markdown", vim.bo[bufnr].filetype)
+      eq(file_entry, view.files.groups[1].files[2])
+
+      assert.stub(warn_stub).was_not.called()
+    end)
+  )
+
+  it("opens description-only sections", function()
+    local data = {
+      title = "Review",
+      groups = {
+        {
+          name = "Context",
+          description = "No changed files are required.",
+          files = {},
+        },
+      },
+    }
+
+    track_stub(json_loader, "load_json", function() return data, nil end)
+
+    local adapter = {
+      ctx = {
+        toplevel = test_dir,
+        dir = test_dir,
+        path_args = {},
+      },
+      diffview_options = function()
+        return {
+          left = { type = RevType.LOCAL },
+          right = { type = RevType.LOCAL },
+          options = {},
+        }
+      end,
+      rev_to_pretty_string = function() return "" end,
+      rev_to_args = function() return {} end,
+      get_merge_context = function() return nil end,
+      instanceof = function() return true end,
+    }
+
+    track_stub(vcs, "get_adapter", function() return nil, adapter end)
+
+    local err_stub = track_stub(utils, "err", function() end)
+    local view = lib.json_view_open(test_dir .. "/review.json", {})
+
+    assert(view ~= nil, "Expected view to be created")
+    eq(1, #view.files.groups)
+    eq("Context", view.files.groups[1].name)
+    eq("Description", view.files.groups[1].files[1].path)
+    eq({ "No changed files are required." }, view.files.groups[1].files[1].layout.b.file.get_data())
+    assert.stub(err_stub).was_not.called()
   end)
 
   it("errors when no changed files remain", function()
@@ -279,9 +358,7 @@ describe("diffview.json_view_open", function()
 
     write_file(test_dir .. "/only.lua", "print('still no diff')")
 
-    track_stub(json_loader, "load_json", function()
-      return data, nil
-    end)
+    track_stub(json_loader, "load_json", function() return data, nil end)
 
     local adapter = {
       ctx = {
@@ -296,29 +373,15 @@ describe("diffview.json_view_open", function()
           options = {},
         }
       end,
-      rev_to_pretty_string = function()
-        return ""
-      end,
-      rev_to_args = function()
-        return {}
-      end,
-      tracked_files = function()
-        return make_waitable(nil, {}, {})
-      end,
-      show_untracked = function()
-        return false
-      end,
-      get_merge_context = function()
-        return nil
-      end,
-      instanceof = function()
-        return true
-      end,
+      rev_to_pretty_string = function() return "" end,
+      rev_to_args = function() return {} end,
+      tracked_files = function() return make_waitable(nil, {}, {}) end,
+      show_untracked = function() return false end,
+      get_merge_context = function() return nil end,
+      instanceof = function() return true end,
     }
 
-    track_stub(vcs, "get_adapter", function()
-      return nil, adapter
-    end)
+    track_stub(vcs, "get_adapter", function() return nil, adapter end)
 
     local err_stub = track_stub(utils, "err", function() end)
 
@@ -344,9 +407,7 @@ describe("diffview.json_view_open", function()
       },
     }
 
-    track_stub(json_loader, "load_json", function()
-      return data, nil
-    end)
+    track_stub(json_loader, "load_json", function() return data, nil end)
 
     local staged_entry = make_file("staged.lua", "staged", "A")
     local working_entry = make_file("unstaged.lua", "working", "M")
@@ -365,50 +426,26 @@ describe("diffview.json_view_open", function()
           options = {},
         }
       end,
-      rev_to_pretty_string = function()
-        return ""
-      end,
-      rev_to_args = function()
-        return {}
-      end,
+      rev_to_pretty_string = function() return "" end,
+      rev_to_args = function() return {} end,
       tracked_files = function(_, _, _, _, kind)
-        if kind == "working" then
-          return make_waitable(nil, { working_entry }, {})
-        end
-        if kind == "staged" then
-          return make_waitable(nil, { staged_entry }, {})
-        end
+        if kind == "working" then return make_waitable(nil, { working_entry }, {}) end
+        if kind == "staged" then return make_waitable(nil, { staged_entry }, {}) end
         return make_waitable(nil, {}, {})
       end,
-      untracked_files = function()
-        return make_waitable(nil, { untracked_entry })
-      end,
-      show_untracked = function()
-        return true
-      end,
-      head_rev = function()
-        return { commit = "HEAD" }
-      end,
+      untracked_files = function() return make_waitable(nil, { untracked_entry }) end,
+      show_untracked = function() return true end,
+      head_rev = function() return { commit = "HEAD" } end,
       Rev = setmetatable({
-        new_null_tree = function()
-          return { commit = "NULL" }
-        end,
+        new_null_tree = function() return { commit = "NULL" } end,
       }, {
-        __call = function(_, rev_type, value)
-          return { type = rev_type, value = value }
-        end,
+        __call = function(_, rev_type, value) return { type = rev_type, value = value } end,
       }),
-      get_merge_context = function()
-        return nil
-      end,
-      instanceof = function()
-        return true
-      end,
+      get_merge_context = function() return nil end,
+      instanceof = function() return true end,
     }
 
-    track_stub(vcs, "get_adapter", function()
-      return nil, adapter
-    end)
+    track_stub(vcs, "get_adapter", function() return nil, adapter end)
 
     local warn_stub = track_stub(utils, "warn", function() end)
     local view = lib.json_view_open(test_dir .. "/review.json", {})
@@ -424,48 +461,51 @@ describe("diffview.json_view_open", function()
     assert.stub(warn_stub).was_not.called()
   end)
 
-  it("includes staged and untracked files for stage..local with git adapter", async_test(function()
-    run_git(test_dir, { "init" })
-    run_git(test_dir, { "config", "user.email", "diffview@example.com" })
-    run_git(test_dir, { "config", "user.name", "Diffview Tests" })
-    run_git(test_dir, { "config", "status.showUntrackedFiles", "all" })
+  it(
+    "includes staged and untracked files for stage..local with git adapter",
+    async_test(function()
+      run_git(test_dir, { "init" })
+      run_git(test_dir, { "config", "user.email", "diffview@example.com" })
+      run_git(test_dir, { "config", "user.name", "Diffview Tests" })
+      run_git(test_dir, { "config", "status.showUntrackedFiles", "all" })
 
-    write_file(test_dir .. "/unstaged.lua", "initial\n")
-    run_git(test_dir, { "add", "unstaged.lua" })
-    run_git(test_dir, { "commit", "-m", "initial" })
+      write_file(test_dir .. "/unstaged.lua", "initial\n")
+      run_git(test_dir, { "add", "unstaged.lua" })
+      run_git(test_dir, { "commit", "-m", "initial" })
 
-    write_file(test_dir .. "/unstaged.lua", "modified\n")
-    write_file(test_dir .. "/staged.lua", "staged\n")
-    run_git(test_dir, { "add", "staged.lua" })
-    write_file(test_dir .. "/untracked.lua", "untracked\n")
+      write_file(test_dir .. "/unstaged.lua", "modified\n")
+      write_file(test_dir .. "/staged.lua", "staged\n")
+      run_git(test_dir, { "add", "staged.lua" })
+      write_file(test_dir .. "/untracked.lua", "untracked\n")
 
-    local data = {
-      title = "Stage Review",
-      groups = {
-        {
-          name = "Group A",
-          files = {
-            { path = "staged.lua" },
-            { path = "unstaged.lua" },
-            { path = "untracked.lua" },
+      local data = {
+        title = "Stage Review",
+        groups = {
+          {
+            name = "Group A",
+            files = {
+              { path = "staged.lua" },
+              { path = "unstaged.lua" },
+              { path = "untracked.lua" },
+            },
           },
         },
-      },
-    }
+      }
 
-    write_file(test_dir .. "/review.json", vim.json.encode(data))
+      write_file(test_dir .. "/review.json", vim.json.encode(data))
 
-    local view = lib.json_view_open(test_dir .. "/review.json", { "-C=" .. test_dir })
+      local view = lib.json_view_open(test_dir .. "/review.json", { "-C=" .. test_dir })
 
-    assert(view ~= nil, "Expected view to be created")
-    eq(1, #view.files.groups)
-    eq(3, #view.files.groups[1].files)
-    eq({ "staged.lua", "unstaged.lua", "untracked.lua" }, {
-      view.files.groups[1].files[1].path,
-      view.files.groups[1].files[2].path,
-      view.files.groups[1].files[3].path,
-    })
-  end))
+      assert(view ~= nil, "Expected view to be created")
+      eq(1, #view.files.groups)
+      eq(3, #view.files.groups[1].files)
+      eq({ "staged.lua", "unstaged.lua", "untracked.lua" }, {
+        view.files.groups[1].files[1].path,
+        view.files.groups[1].files[2].path,
+        view.files.groups[1].files[3].path,
+      })
+    end)
+  )
 end)
 
 describe("diffview.file_panel grouped", function()
@@ -500,10 +540,12 @@ describe("diffview.file_panel grouped", function()
 
   it("orders grouped files for list and tree modes", function()
     local files = GroupedFileDict()
+    local description = make_file("Description", "working", " ")
+    description.is_json_description = true
     local file_a = make_file("src/components/Button.lua")
     local file_b = make_file("lib/utils/helpers.lua")
 
-    files:add_group("Group A", { file_a })
+    files:add_group("Group A", { description, file_a })
     files:add_group("Group B", { file_b })
 
     local list_panel = {
@@ -516,7 +558,7 @@ describe("diffview.file_panel grouped", function()
     list_panel.ordered_file_list = FilePanel.ordered_file_list
 
     local list_order = list_panel:ordered_file_list()
-    eq({ file_a, file_b }, list_order)
+    eq({ description, file_a, file_b }, list_order)
 
     local tree_panel = {
       files = files,
@@ -528,7 +570,7 @@ describe("diffview.file_panel grouped", function()
     tree_panel.ordered_file_list = FilePanel.ordered_file_list
 
     local tree_order = tree_panel:ordered_file_list()
-    eq({ file_a, file_b }, tree_order)
+    eq({ description, file_a, file_b }, tree_order)
   end)
 end)
 
@@ -541,16 +583,16 @@ describe("diffview.render grouped", function()
     config._config.use_icons = false
   end)
 
-  after_each(function()
-    config._config = original_config
-  end)
+  after_each(function() config._config = original_config end)
 
   it("renders grouped headers and title", function()
     local files = GroupedFileDict("My Review")
+    local description = make_file("Description", "working", " ")
+    description.is_json_description = true
     local file_a = make_file("src/a.lua")
     local file_b = make_file("api/b.lua")
 
-    files:add_group("Frontend", { file_a })
+    files:add_group("Frontend", { description, file_a })
     files:add_group("Backend", { file_b })
 
     local panel = {
@@ -565,9 +607,7 @@ describe("diffview.render grouped", function()
       path_args = {},
       help_mapping = nil,
       view = nil,
-      infer_width = function()
-        return 80
-      end,
+      infer_width = function() return 80 end,
     }
 
     panel.should_show_file = FilePanel.should_show_file
@@ -579,7 +619,11 @@ describe("diffview.render grouped", function()
     render(panel)
 
     eq("My Review", panel.components.path.comp.lines[2])
-    eq("Frontend (1)", panel.components.group_1.title.comp.lines[1])
+    eq("Frontend (2)", panel.components.group_1.title.comp.lines[1])
+    assert(
+      panel.components.group_1.files[1].comp.lines[1]:match("Description"),
+      "Expected description entry to render as Description"
+    )
     eq("Backend (1)", panel.components.group_2.title.comp.lines[1])
   end)
 end)
@@ -587,9 +631,7 @@ end)
 describe("diffview.completers DiffviewOpenJson", function()
   local stubs
 
-  before_each(function()
-    stubs = {}
-  end)
+  before_each(function() stubs = {} end)
 
   after_each(function()
     for _, s in ipairs(stubs) do
@@ -602,25 +644,15 @@ describe("diffview.completers DiffviewOpenJson", function()
     local adapter = {
       comp = {
         open = {
-          get_all_names = function()
-            return { "--cached" }
-          end,
-          get_completion = function()
-            return { "--cached" }
-          end,
+          get_all_names = function() return { "--cached" } end,
+          get_completion = function() return { "--cached" } end,
         },
       },
-      rev_candidates = function()
-        return { "HEAD", "main..feature" }
-      end,
-      path_candidates = function()
-        return {}
-      end,
+      rev_candidates = function() return { "HEAD", "main..feature" } end,
+      path_candidates = function() return {} end,
     }
 
-    stubs[#stubs + 1] = stub(diffview, "get_adapter", function()
-      return adapter
-    end)
+    stubs[#stubs + 1] = stub(diffview, "get_adapter", function() return adapter end)
 
     local cmd_line = "DiffviewOpenJson review.json "
     local ctx = arg_parser.scan(cmd_line, { cur_pos = #cmd_line + 1 })
