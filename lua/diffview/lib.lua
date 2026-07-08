@@ -32,6 +32,10 @@ local function split_description_lines(description)
   return vim.split(description, "\n", { plain = true })
 end
 
+local function has_description_content(description)
+  return description ~= nil and vim.trim(description) ~= ""
+end
+
 local function create_description_entry(adapter, group_index, description)
   local internal_path = (".diffview-json/descriptions/%d/Description"):format(group_index)
   local entry = FileEntry.with_layout(Diff1.__get(), {
@@ -276,7 +280,7 @@ local function build_grouped_files(adapter, left, right, dv_opt, data)
 
   for group_index, group in ipairs(data.groups) do
     local group_entries = {}
-    if group.description ~= nil then
+    if has_description_content(group.description) then
       group_entries[#group_entries + 1] =
         create_description_entry(adapter, group_index, group.description)
       has_any = true

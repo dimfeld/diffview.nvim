@@ -297,6 +297,60 @@ describe("diffview.json_view_open", function()
     end)
   )
 
+  it("omits blank section descriptions", function()
+    local data = {
+      title = "Review",
+      groups = {
+        {
+          name = "Group A",
+          description = " \n\t ",
+          files = {
+            { path = "keep.lua" },
+          },
+        },
+      },
+    }
+
+    write_file(test_dir .. "/keep.lua", "print('ok')")
+
+    track_stub(json_loader, "load_json", function() return data, nil end)
+
+    local file_entry = make_file("keep.lua", "working", "M")
+
+    local adapter = {
+      ctx = {
+        toplevel = test_dir,
+        dir = test_dir,
+        path_args = {},
+      },
+      diffview_options = function()
+        return {
+          left = { type = RevType.LOCAL },
+          right = { type = RevType.LOCAL },
+          options = {},
+        }
+      end,
+      rev_to_pretty_string = function() return "" end,
+      rev_to_args = function() return {} end,
+      tracked_files = function() return make_waitable(nil, { file_entry }, {}) end,
+      show_untracked = function() return false end,
+      get_merge_context = function() return nil end,
+      instanceof = function() return true end,
+    }
+
+    track_stub(vcs, "get_adapter", function() return nil, adapter end)
+
+    local warn_stub = track_stub(utils, "warn", function() end)
+    local view = lib.json_view_open(test_dir .. "/review.json", {})
+
+    assert(view ~= nil, "Expected view to be created")
+    eq(1, #view.files.groups)
+    eq(1, #view.files.groups[1].files)
+    eq(file_entry, view.files.groups[1].files[1])
+
+    assert.stub(warn_stub).was_not.called()
+  end)
+
   it("opens description-only sections", function()
     local data = {
       title = "Review",
