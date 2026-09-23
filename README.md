@@ -377,6 +377,7 @@ require("diffview").setup({
   },
   file_panel = {
     listing_style = "tree",             -- One of 'list' or 'tree'
+    grouped = true,                    -- Group files as Implementation, Documentation, and Tests
     tree_options = {                    -- Only applies when listing_style is 'tree'
       flatten_dirs = true,              -- Flatten dirs that only contain one single dir
       folder_statuses = "only_folded",  -- One of 'never', 'only_folded' or 'always'.
@@ -519,6 +520,7 @@ require("diffview").setup({
       { "n", "<C-w><C-f>",     actions.goto_file_split,                { desc = "Open the file in a new split" } },
       { "n", "<C-w>gf",        actions.goto_file_tab,                  { desc = "Open the file in a new tabpage" } },
       { "n", "i",              actions.listing_style,                  { desc = "Toggle between 'list' and 'tree' views" } },
+      { "n", "g",              actions.toggle_file_grouping,           { desc = "Toggle file groups" } },
       { "n", "f",              actions.toggle_flatten_dirs,            { desc = "Flatten empty subdirectories in tree listing style" } },
       { "n", "R",              actions.refresh_files,                  { desc = "Update stats and entries in the file list" } },
       { "n", "<leader>e",      actions.focus_files,                    { desc = "Bring focus to the file panel" } },

@@ -653,6 +653,7 @@ local action_names = {
   "select_prev_commit",
   "stage_all",
   "toggle_files",
+  "toggle_file_grouping",
   "toggle_flatten_dirs",
   "toggle_fold",
   "toggle_stage_entry",

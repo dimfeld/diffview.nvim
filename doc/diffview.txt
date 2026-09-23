@@ -690,6 +690,14 @@ view.x.disable_diagnostics
         diagnostics are automatically enabled again when leaving or closing
         the view's tab page.
 
+file_panel.grouped                         *diffview-config-file_panel.grouped*
+        Type: `boolean`, Default: `true`
+
+        Group files in regular diff views as Implementation, Documentation,
+        and Tests. Set this to `false` to start with the regular file list.
+        Use |diffview-actions-toggle_file_grouping| to switch while the view
+        is open.
+
 win_config                                      *diffview-config-win_config*
         Type: `table | fun(): table`, Default: `{}`
 
@@ -1279,6 +1287,19 @@ listing_style                                   *diffview-actions-listing_style*
         Cycle through the available listing styles. The currently available
         styles are: file tree and flat list.
 
+toggle_file_grouping                     *diffview-actions-toggle_file_grouping*
+        Contexts: `file_panel`
+
+        Toggle between the grouped and regular file panel. The grouped panel
+        shows Implementation, Documentation, and Tests. It is the default for
+        regular diff views. The JSON view keeps its custom groups.
+
+        Test directories, test or spec file names, and .snap or .feature files
+        go in Tests. Documentation directories, common documentation names,
+        and .md, .markdown, .rst, .adoc, .org, or .txt files go in
+        Documentation. Other files go in Implementation. Tests take priority
+        when a file matches both groups.
+
 next_conflict                                   *diffview-actions-next_conflict*
         Contexts: `diff_view`, `file_panel`
 
@@ -1802,6 +1823,8 @@ X                       Revert the selected file entry to the state from the
 
                                                 *diffview-maps-refresh_files*
 R                       Update the stats and entries in the file list.
+
+g                       Toggle between grouped and regular file lists.
 
 <Tab>                   Open the diff for the next file.
 

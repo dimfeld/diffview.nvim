@@ -152,32 +152,12 @@ return function(view)
 
         if type(item.collapsed) == "boolean" then
           ---@cast item DirData
-          ---@type FileTree
-          local tree
-
-          if item.kind == "conflicting" then
-            tree = view.panel.files.conflicting_tree
-          elseif item.kind == "working" then
-            tree = view.panel.files.working_tree
-          else
-            tree = view.panel.files.staged_tree
-          end
-
-          ---@type Node
-          local item_node
-          tree.root:deep_some(function(node, _, _)
-            if node == item._node then
-              item_node = node
-              return true
-            end
-          end)
-
-          if item_node then
-            local next_leaf = item_node:next_leaf()
+          if item._node then
+            local next_leaf = item._node:next_leaf()
             if next_leaf then
               view:set_file(next_leaf.data)
             else
-              view:set_file(view.panel.files[1])
+              view:set_file(view.panel:ordered_file_list()[1])
             end
           end
         else
@@ -258,6 +238,14 @@ return function(view)
       view.panel:render()
       view.panel:redraw()
     end,
+    toggle_file_grouping = function()
+      if view.panel.files.is_grouped and view.panel.files:is_grouped() then return end
+      view.panel.grouped = not view.panel.grouped
+      view.panel:update_components()
+      view.panel:render()
+      view.panel:redraw()
+      view.panel:highlight_cur_file()
+    end,
     toggle_flatten_dirs = function()
       view.panel.tree_options.flatten_dirs = not view.panel.tree_options.flatten_dirs
       view.panel:update_components()
@@ -276,11 +264,8 @@ return function(view)
     open_all_folds = function()
       if not view.panel:is_focused() or view.panel.listing_style ~= "tree" then return end
 
-      for _, file_set in ipairs({
-        view.panel.components.conflicting.files,
-        view.panel.components.working.files,
-        view.panel.components.staged.files,
-      }) do
+      local file_sets = view.panel:get_file_components()
+      for _, file_set in ipairs(file_sets) do
         file_set.comp:deep_some(function(comp, _, _)
           if comp.name == "directory" then
             (comp.context --[[@as DirData ]]).collapsed = false
@@ -294,11 +279,8 @@ return function(view)
     close_all_folds = function()
       if not view.panel:is_focused() or view.panel.listing_style ~= "tree" then return end
 
-      for _, file_set in ipairs({
-        view.panel.components.conflicting.files,
-        view.panel.components.working.files,
-        view.panel.components.staged.files,
-      }) do
+      local file_sets = view.panel:get_file_components()
+      for _, file_set in ipairs(file_sets) do
         file_set.comp:deep_some(function(comp, _, _)
           if comp.name == "directory" then
             (comp.context --[[@as DirData ]]).collapsed = true

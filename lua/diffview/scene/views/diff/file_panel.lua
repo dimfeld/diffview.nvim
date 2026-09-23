@@ -4,6 +4,7 @@ local oop = require("diffview.oop")
 local renderer = require("diffview.renderer")
 local utils = require("diffview.utils")
 local Panel = require("diffview.ui.panel").Panel
+local file_groups = require("diffview.scene.views.diff.file_groups")
 local review = lazy.require("diffview.review") ---@module "diffview.review"
 local api = vim.api
 local M = {}
@@ -26,6 +27,8 @@ local M = {}
 ---@field constrain_cursor function
 ---@field help_mapping string
 ---@field group_component_names string[]|nil
+---@field grouped boolean
+---@field display_files FileDict|GroupedFileDict
 local FilePanel = oop.create_class("FilePanel", Panel)
 
 FilePanel.winopts = vim.tbl_extend("force", Panel.winopts, {
@@ -61,6 +64,7 @@ function FilePanel:init(adapter, files, path_args, rev_pretty_name)
   self.path_args = path_args
   self.rev_pretty_name = rev_pretty_name
   self.listing_style = conf.file_panel.listing_style
+  self.grouped = conf.file_panel.grouped
   self.tree_options = conf.file_panel.tree_options
 
   self:on_autocmd("BufNew", {
@@ -88,12 +92,17 @@ function FilePanel:setup_buffer()
 end
 
 function FilePanel:update_components()
-  if self.files.is_grouped and self.files:is_grouped() then
+  self.display_files = self.files
+  if self.grouped and not (self.files.is_grouped and self.files:is_grouped()) then
+    self.display_files = file_groups.group(self.files)
+  end
+
+  if self.display_files.is_grouped and self.display_files:is_grouped() then
     local schema = { { name = "path" } }
     local group_component_names = {}
     local file_filter = function(file) return self:should_show_file(file) end
 
-    for i, group in ipairs(self.files.groups) do
+    for i, group in ipairs(self.display_files.groups) do
       local files_schema
 
       if self.listing_style == "list" then
@@ -278,11 +287,12 @@ end
 
 ---@return FileEntry[]
 function FilePanel:ordered_file_list()
+  local display_files = self.display_files or self.files
   local files
   if self.listing_style == "list" then
     local list = {}
 
-    for _, file in self.files:iter() do
+    for _, file in display_files:iter() do
       list[#list + 1] = file
     end
 
@@ -290,9 +300,9 @@ function FilePanel:ordered_file_list()
   else
     local nodes
 
-    if self.files.is_grouped and self.files:is_grouped() then
+    if display_files.is_grouped and display_files:is_grouped() then
       nodes = {}
-      for _, group in ipairs(self.files.groups) do
+      for _, group in ipairs(display_files.groups) do
         utils.vec_push(nodes, unpack(group.tree.root:leaves()))
       end
     else
@@ -392,22 +402,7 @@ function FilePanel:highlight_file(file)
   if not (self:is_open() and self:buf_loaded()) then return end
 
   if self.listing_style == "list" then
-    local file_lists
-
-    if self.files.is_grouped and self.files:is_grouped() then
-      file_lists = {}
-      for _, name in ipairs(self.group_component_names or {}) do
-        file_lists[#file_lists + 1] = self.components[name].files
-      end
-    else
-      file_lists = {
-        self.components.conflicting.files,
-        self.components.working.files,
-        self.components.staged.files,
-      }
-    end
-
-    for _, file_list in ipairs(file_lists) do
+    for _, file_list in ipairs(self:get_file_components()) do
       for _, comp_struct in ipairs(file_list) do
         if file == comp_struct.comp.context then
           utils.set_cursor(self.winid, comp_struct.comp.lstart + 1, 0)
@@ -415,22 +410,7 @@ function FilePanel:highlight_file(file)
       end
     end
   else -- tree
-    local file_lists
-
-    if self.files.is_grouped and self.files:is_grouped() then
-      file_lists = {}
-      for _, name in ipairs(self.group_component_names or {}) do
-        file_lists[#file_lists + 1] = self.components[name].files
-      end
-    else
-      file_lists = {
-        self.components.conflicting.files,
-        self.components.working.files,
-        self.components.staged.files,
-      }
-    end
-
-    for _, comp_struct in ipairs(file_lists) do
+    for _, comp_struct in ipairs(self:get_file_components()) do
       comp_struct.comp:deep_some(function(cur)
         if file == cur.context then
           local was_concealed = false
@@ -465,6 +445,22 @@ end
 
 function FilePanel:highlight_cur_file()
   if self.cur_file then self:highlight_file(self.cur_file) end
+end
+
+function FilePanel:get_file_components()
+  if self.group_component_names then
+    local components = {}
+    for _, name in ipairs(self.group_component_names) do
+      components[#components + 1] = self.components[name].files
+    end
+    return components
+  end
+
+  return {
+    self.components.conflicting.files,
+    self.components.working.files,
+    self.components.staged.files,
+  }
 end
 
 function FilePanel:highlight_prev_file()

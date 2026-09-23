@@ -72,6 +72,7 @@ M.defaults = {
   },
   file_panel = {
     listing_style = "tree",
+    grouped = true,
     tree_options = {
       flatten_dirs = true,
       folder_statuses = "only_folded"
@@ -221,6 +222,7 @@ M.defaults = {
       { "n", "<C-w><C-f>",     actions.goto_file_split,                { desc = "Open the file in a new split" } },
       { "n", "<C-w>gf",        actions.goto_file_tab,                  { desc = "Open the file in a new tabpage" } },
       { "n", "i",              actions.listing_style,                  { desc = "Toggle between 'list' and 'tree' views" } },
+      { "n", "g",              actions.toggle_file_grouping,           { desc = "Toggle file groups" } },
       { "n", "f",              actions.toggle_flatten_dirs,            { desc = "Flatten empty subdirectories in tree listing style" } },
       { "n", "R",              actions.refresh_files,                  { desc = "Update stats and entries in the file list" } },
       { "n", "<leader>e",      actions.focus_files,                    { desc = "Bring focus to the file panel" } },

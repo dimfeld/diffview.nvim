@@ -223,13 +223,14 @@ return function(panel)
 
   if conf.show_help_hints and panel.help_mapping then comp:ln() end
 
-  if panel.files.is_grouped and panel.files:is_grouped() then
-    if panel.files.title then
-      comp:add_line(panel.files.title, "DiffviewFilePanelTitle")
+  local display_files = panel.display_files or panel.files
+  if display_files.is_grouped and display_files:is_grouped() then
+    if display_files.title then
+      comp:add_line(display_files.title, "DiffviewFilePanelTitle")
       comp:ln()
     end
 
-    for i, group in ipairs(panel.files.groups) do
+    for i, group in ipairs(display_files.groups) do
       local group_comp = panel.components["group_" .. i]
       comp = group_comp.title.comp
       comp:add_text(group.name .. " ", "DiffviewFilePanelTitle")
