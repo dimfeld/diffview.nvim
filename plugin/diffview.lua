@@ -16,6 +16,7 @@ local command = api.nvim_create_user_command
 local function completion(...) return diffview.completion(...) end
 
 -- Create commands
+command("DiffviewReload", function() diffview.reload() end, { nargs = 0 })
 command(
   "DiffviewOpen",
   function(ctx) diffview.open(arg_parser.scan(ctx.args).args) end,

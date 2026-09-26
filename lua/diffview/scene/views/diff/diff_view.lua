@@ -37,6 +37,7 @@ local M = {}
 
 ---@class DiffView : StandardView
 ---@operator call : DiffView
+---@field reopen? fun(): DiffView?
 ---@field adapter VCSAdapter
 ---@field rev_arg string
 ---@field path_args string[]

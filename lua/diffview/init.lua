@@ -156,6 +156,18 @@ function M.file_history(range, args)
   if view then view:open() end
 end
 
+function M.reload()
+  local view = lib.get_current_view()
+  if not view or not view.reopen then return end
+
+  local replacement = view.reopen()
+  if not replacement then return end
+
+  replacement:open()
+  view:close()
+  lib.dispose_view(view)
+end
+
 function M.close(tabpage)
   if tabpage then
     vim.schedule(function() lib.dispose_stray_views() end)

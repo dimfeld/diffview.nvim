@@ -250,6 +250,14 @@ Examples:
 For information about additional `[options]`, visit the
 [documentation](https://github.com/sindrets/diffview.nvim/blob/main/doc/diffview.txt).
 
+
+### `:DiffviewReload`
+
+Reopen the current diff view with its original command arguments, repository, and path
+filters. Resolve revisions against the current repository state. This works
+with `DiffviewOpen`, `DiffviewShow`, and `DiffviewOpenJson`. If the command fails,
+the current view stays open. Outside a diff view, the command does nothing.
+
 Additional commands for convenience:
 
 - `:DiffviewClose`: Close the current diffview. You can also use `:tabclose`.

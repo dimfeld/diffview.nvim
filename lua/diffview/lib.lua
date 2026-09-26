@@ -68,25 +68,44 @@ local function create_description_entry(adapter, group_index, description)
   return entry
 end
 
-function M.diffview_open(args)
-  local default_args = config.get_config().default_args.DiffviewOpen
-  local argo = arg_parser.parse(utils.flatten({ default_args, args }))
-  local rev_arg = argo.args[1]
-
-  logger:info("[command call] :DiffviewOpen " .. table.concat(
-    utils.flatten({
-      default_args,
-      args,
-    }),
-    " "
-  ))
-
-  local err, adapter = vcs.get_adapter({
+local function get_open_adapter(argo, context)
+  if context then
+    return context.create_adapter(
+      context.toplevel,
+      vim.deepcopy(context.path_args),
+      context.toplevel
+    )
+  end
+  return vcs.get_adapter({
     cmd_ctx = {
       path_args = argo.post_args,
       cpath = argo:get_flag("C", { no_empty = true, expand = true }),
     },
   })
+end
+
+local function set_reopen(view, opener, args, json_path)
+  local context = {
+    args = vim.deepcopy(args),
+    create_adapter = view.adapter.create,
+    toplevel = view.adapter.ctx.toplevel,
+    path_args = vim.deepcopy(view.adapter.ctx.path_args),
+  }
+  view.reopen = function()
+    if json_path then return M[opener](json_path, nil, context) end
+    return M[opener](nil, context)
+  end
+end
+
+function M.diffview_open(args, context)
+  local default_args = context and {} or config.get_config().default_args.DiffviewOpen
+  args = context and vim.deepcopy(context.args) or utils.flatten({ default_args, args })
+  local argo = arg_parser.parse(args)
+  local rev_arg = argo.args[1]
+
+  logger:info("[command call] :DiffviewOpen " .. table.concat(args, " "))
+
+  local err, adapter = get_open_adapter(argo, context)
 
   if err then
     utils.err(err)
@@ -110,24 +129,20 @@ function M.diffview_open(args)
 
   if not v:is_valid() then return end
 
+  set_reopen(v, "diffview_open", args)
   table.insert(M.views, v)
   logger:debug("DiffView instantiation successful!")
 
   return v
 end
 
-function M.diffview_show(args)
-  local default_args = config.get_config().default_args.DiffviewOpen
-  local argo = arg_parser.parse(utils.flatten({ default_args, args }))
+function M.diffview_show(args, context)
+  local default_args = context and {} or config.get_config().default_args.DiffviewOpen
+  args = context and vim.deepcopy(context.args) or utils.flatten({ default_args, args })
+  local argo = arg_parser.parse(args)
   local rev_arg = argo.args[1]
 
-  logger:info("[command call] :DiffviewShow " .. table.concat(
-    utils.flatten({
-      default_args,
-      args,
-    }),
-    " "
-  ))
+  logger:info("[command call] :DiffviewShow " .. table.concat(args, " "))
 
   if not rev_arg then
     utils.err("Usage: DiffviewShow {rev} [options] [ -- {paths...}]")
@@ -137,12 +152,7 @@ function M.diffview_show(args)
     return
   end
 
-  local err, adapter = vcs.get_adapter({
-    cmd_ctx = {
-      path_args = argo.post_args,
-      cpath = argo:get_flag("C", { no_empty = true, expand = true }),
-    },
-  })
+  local err, adapter = get_open_adapter(argo, context)
 
   if err then
     utils.err(err)
@@ -176,6 +186,7 @@ function M.diffview_show(args)
 
   if not v:is_valid() then return end
 
+  set_reopen(v, "diffview_show", args)
   table.insert(M.views, v)
   logger:debug("DiffView instantiation successful!")
 
@@ -307,16 +318,16 @@ local function build_grouped_files(adapter, left, right, dv_opt, data)
   return grouped_files, nil, missing, has_any
 end
 
-function M.json_view_open(json_path, args)
+function M.json_view_open(json_path, args, context)
   json_path = vim.fn.expand(json_path)
-  local default_args = config.get_config().default_args.DiffviewOpen
-  local argo = arg_parser.parse(utils.flatten({ default_args, args }))
+  local default_args = context and {} or config.get_config().default_args.DiffviewOpen
+  args = context and vim.deepcopy(context.args) or utils.flatten({ default_args, args })
+  local argo = arg_parser.parse(args)
   local rev_arg = argo.args[1]
 
   logger:info("[command call] :DiffviewOpenJson " .. table.concat(
     utils.flatten({
       json_path,
-      default_args,
       args,
     }),
     " "
@@ -328,12 +339,7 @@ function M.json_view_open(json_path, args)
     return
   end
 
-  local err, adapter = vcs.get_adapter({
-    cmd_ctx = {
-      path_args = argo.post_args,
-      cpath = argo:get_flag("C", { no_empty = true, expand = true }),
-    },
-  })
+  local err, adapter = get_open_adapter(argo, context)
 
   if err then
     utils.err(err)
@@ -347,6 +353,7 @@ function M.json_view_open(json_path, args)
 
   local grouped_files, build_err, missing, has_any =
     build_grouped_files(adapter, opts.left, opts.right, opts.options, data)
+  await(async.scheduler())
 
   if build_err then
     utils.err(build_err)
@@ -374,6 +381,7 @@ function M.json_view_open(json_path, args)
 
   if not v:is_valid() then return end
 
+  set_reopen(v, "json_view_open", args, pl:absolute(json_path))
   table.insert(M.views, v)
   logger:debug("DiffView instantiation successful!")
 

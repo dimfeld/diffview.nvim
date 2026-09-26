@@ -484,6 +484,14 @@ COMMANDS                                        *diffview-commands*
                                                 *:DiffviewFocusFiles*
 :DiffviewFocusFiles     Brings focus to the file panel. Opens it if it's closed.
 
+                                                *:DiffviewReload*
+:DiffviewReload        Reopen the current diff view with its original command
+                        arguments, repository, and path filters. Resolve revisions
+                        against the current repository state. This supports
+                        DiffviewOpen, DiffviewShow, and DiffviewOpenJson.
+                        Outside a diff view, this command does nothing. If the
+                        command fails, the current view stays open.
+
                                                 *:DiffviewRefresh*
 :DiffviewRefresh        Update stats and entries in the file list of the
                         current Diffview.
