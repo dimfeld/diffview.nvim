@@ -5,6 +5,16 @@ local M = {}
 local doc_extensions =
   { md = true, markdown = true, rst = true, adoc = true, org = true, txt = true }
 local test_extensions = { snap = true, feature = true }
+local test_directories = {
+  test = true,
+  tests = true,
+  testing = true,
+  spec = true,
+  specs = true,
+  __tests__ = true,
+  fixture = true,
+  fixtures = true,
+}
 local doc_names = {
   readme = true,
   changelog = true,
@@ -24,14 +34,12 @@ function M.classify(path)
   local stem, extension = name:match("^(.*)%.([^%.]+)$")
   stem = stem or name
 
+  for directory in lower:gmatch("([^/]+)/") do
+    if test_directories[directory] then return "Tests" end
+  end
+
   if
-    lower:match("^tests?/")
-    or lower:match("/tests?/")
-    or lower:match("^specs?/")
-    or lower:match("/specs?/")
-    or lower:match("^__tests__/")
-    or lower:match("/__tests__/")
-    or stem:match("^test[_%-]")
+    stem:match("^test[_%-]")
     or stem:match("^spec[_%-]")
     or stem:match("[_%.%-]tests?$")
     or stem:match("[_%.%-]spec$")

@@ -1302,8 +1302,10 @@ toggle_file_grouping                     *diffview-actions-toggle_file_grouping*
         shows Implementation, Documentation, and Tests. It is the default for
         regular diff views. The JSON view keeps its custom groups.
 
-        Test directories, test or spec file names, and .snap or .feature files
-        go in Tests. Documentation directories, common documentation names,
+        Directories named test, tests, testing, spec, specs, __tests__, fixture,
+        or fixtures anywhere in the repository path put a file in Tests.
+        Test or spec file names and .snap or .feature files also go in Tests.
+        Documentation directories, common documentation names,
         and .md, .markdown, .rst, .adoc, .org, or .txt files go in
         Documentation. Other files go in Implementation. Tests take priority
         when a file matches both groups.

@@ -215,6 +215,11 @@ up stale data when opening a DiffView.
 
 ## Usage
 
+The file panel groups files as Implementation, Documentation, and Tests by default.
+Test directories are checked throughout the repository path. Files inside `test`,
+`tests`, `testing`, `spec`, `specs`, `__tests__`, `fixture`, or `fixtures` directories
+go in Tests, including documentation files in those directories.
+
 ### `:DiffviewOpen [git rev] [options] [ -- {paths...}]`
 
 Calling `:DiffviewOpen` with no args opens a new Diffview that compares against

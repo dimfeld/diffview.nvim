@@ -19,6 +19,26 @@ describe("diffview file groups", function()
     eq("Tests", file_groups.classify("fixtures/result.snap"))
   end)
 
+  it("checks test directories throughout the repository path", function()
+    for _, directory in ipairs({
+      "test",
+      "tests",
+      "testing",
+      "spec",
+      "specs",
+      "__tests__",
+      "fixture",
+      "fixtures",
+    }) do
+      eq("Tests", file_groups.classify(directory .. "/helper.lua"))
+      eq("Tests", file_groups.classify("packages/widget/" .. directory .. "/data/helper.lua"))
+      eq("Tests", file_groups.classify("packages/widget/" .. directory .. "/README.md"))
+    end
+    eq("Tests", file_groups.classify("packages/widget/Testing/helper.lua"))
+    eq("Implementation", file_groups.classify("packages/widget/testing_tools/helper.lua"))
+    eq("Implementation", file_groups.classify("packages/widget/fixtures.lua"))
+  end)
+
   it("shows each file once and restores regular order when grouping is off", function()
     local files = FileDict()
     local conflict = file("src/conflict.lua", "conflicting")
