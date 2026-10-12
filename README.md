@@ -218,7 +218,9 @@ up stale data when opening a DiffView.
 The file panel groups files as Implementation, Documentation, and Tests by default.
 Test directories are checked throughout the repository path. Files inside `test`,
 `tests`, `testing`, `spec`, `specs`, `__tests__`, `fixture`, or `fixtures` directories
-go in Tests, including documentation files in those directories.
+go in Tests, including documentation files in those directories. File names that
+contain `test`, `tests`, or `testing` as a separate word (for example `testing.ts`,
+`widget_test_utils.lua`, or `widget.tests.ts`) also go in Tests.
 
 ### `:DiffviewOpen [git rev] [options] [ -- {paths...}]`
 

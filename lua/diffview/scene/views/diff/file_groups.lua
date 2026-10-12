@@ -15,6 +15,7 @@ local test_directories = {
   fixture = true,
   fixtures = true,
 }
+local test_words = { test = true, tests = true, testing = true }
 local doc_names = {
   readme = true,
   changelog = true,
@@ -38,10 +39,12 @@ function M.classify(path)
     if test_directories[directory] then return "Tests" end
   end
 
+  for word in stem:gmatch("[^_%.%-%s]+") do
+    if test_words[word] then return "Tests" end
+  end
+
   if
-    stem:match("^test[_%-]")
-    or stem:match("^spec[_%-]")
-    or stem:match("[_%.%-]tests?$")
+    stem:match("^spec[_%-]")
     or stem:match("[_%.%-]spec$")
     or (extension and test_extensions[extension])
   then

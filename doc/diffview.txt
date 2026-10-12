@@ -1304,7 +1304,9 @@ toggle_file_grouping                     *diffview-actions-toggle_file_grouping*
 
         Directories named test, tests, testing, spec, specs, __tests__, fixture,
         or fixtures anywhere in the repository path put a file in Tests.
-        Test or spec file names and .snap or .feature files also go in Tests.
+        File names that contain test, tests, or testing as a separate word
+        (separated by _, -, or .), spec file names, and .snap or .feature
+        files also go in Tests.
         Documentation directories, common documentation names,
         and .md, .markdown, .rst, .adoc, .org, or .txt files go in
         Documentation. Other files go in Implementation. Tests take priority

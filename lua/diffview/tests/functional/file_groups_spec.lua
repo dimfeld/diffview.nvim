@@ -19,6 +19,24 @@ describe("diffview file groups", function()
     eq("Tests", file_groups.classify("fixtures/result.snap"))
   end)
 
+  it("treats test words in file names as tests", function()
+    for _, path in ipairs({
+      "src/testing.ts",
+      "src/test.lua",
+      "src/tests.py",
+      "src/widget_testing_utils.ts",
+      "src/widget-test-helpers.ts",
+      "src/widget.tests.ts",
+      "src/Test_Helpers.ts",
+      "src/test.data.json",
+    }) do
+      eq("Tests", file_groups.classify(path))
+    end
+    eq("Implementation", file_groups.classify("src/latest.ts"))
+    eq("Implementation", file_groups.classify("src/contest_results.ts"))
+    eq("Implementation", file_groups.classify("src/testimonial.ts"))
+  end)
+
   it("checks test directories throughout the repository path", function()
     for _, directory in ipairs({
       "test",
